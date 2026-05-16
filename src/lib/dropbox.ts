@@ -153,7 +153,13 @@ export async function downloadContent(path: string): Promise<Response> {
   return res;
 }
 
-/** Upload a file, overwriting any existing file at the same path. */
+/** Largest file size Dropbox accepts in a single `files/upload` request. */
+export const SIMPLE_UPLOAD_LIMIT = 150 * 1024 * 1024;
+
+/** Chunk size used for upload sessions (8 MB). */
+export const UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024;
+
+/** Upload a file (<= 150 MB) in a single request, overwriting any existing file. */
 export async function uploadFile(path: string, body: Buffer): Promise<DbxEntry> {
   const token = await getAccessToken();
   const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
@@ -174,6 +180,135 @@ export async function uploadFile(path: string, body: Buffer): Promise<DbxEntry> 
     throw new DropboxError(res.status, await res.text());
   }
   return mapEntry((await res.json()) as RawEntry);
+}
+
+/**
+ * Re-chunk a byte stream into fixed-size buffers (the final buffer may be
+ * smaller). At most ~2x the chunk size is held in memory at any time, so this
+ * stays cheap regardless of the total file size.
+ */
+async function* rechunk(
+  stream: ReadableStream<Uint8Array>,
+  chunkSize: number,
+): AsyncGenerator<Buffer> {
+  const reader = stream.getReader();
+  let parts: Buffer[] = [];
+  let buffered = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.length === 0) continue;
+      parts.push(Buffer.from(value));
+      buffered += value.length;
+      while (buffered >= chunkSize) {
+        const combined = Buffer.concat(parts, buffered);
+        yield combined.subarray(0, chunkSize);
+        const rest = combined.subarray(chunkSize);
+        parts = rest.length ? [Buffer.from(rest)] : [];
+        buffered = rest.length;
+      }
+    }
+    if (buffered > 0) {
+      yield Buffer.concat(parts, buffered);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** POST a chunk to a Dropbox content endpoint with a JSON API argument. */
+async function contentRpc<T>(
+  token: string,
+  endpoint: string,
+  arg: unknown,
+  body: Buffer,
+): Promise<T> {
+  const res = await fetch(`https://content.dropboxapi.com/2/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify(arg),
+    },
+    body: new Uint8Array(body),
+  });
+  if (!res.ok) {
+    throw new DropboxError(res.status, await res.text());
+  }
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
+}
+
+/**
+ * Upload a file of any size using a Dropbox upload session
+ * (start / append_v2 / finish). Chunks are streamed from `stream` 8 MB at a
+ * time, so memory use stays bounded even for multi-gigabyte files.
+ *
+ * `onProgress` is invoked with the cumulative byte count after each chunk,
+ * which callers can use to surface progress.
+ */
+export async function uploadSession(
+  path: string,
+  stream: ReadableStream<Uint8Array>,
+  onProgress?: (bytesUploaded: number) => void,
+): Promise<DbxEntry> {
+  const token = await getAccessToken();
+  let sessionId: string | null = null;
+  let offset = 0;
+  // The final chunk is held back so it can be sent with `finish`.
+  let pending: Buffer | null = null;
+
+  for await (const chunk of rechunk(stream, UPLOAD_CHUNK_SIZE)) {
+    if (pending) {
+      if (sessionId === null) {
+        const r = await contentRpc<{ session_id: string }>(
+          token,
+          'files/upload_session/start',
+          { close: false },
+          pending,
+        );
+        sessionId = r.session_id;
+      } else {
+        await contentRpc(
+          token,
+          'files/upload_session/append_v2',
+          { cursor: { session_id: sessionId, offset }, close: false },
+          pending,
+        );
+      }
+      offset += pending.length;
+      onProgress?.(offset);
+    }
+    pending = chunk;
+  }
+
+  // Open a session even when the whole file fit in a single chunk.
+  if (sessionId === null) {
+    const first = pending ?? Buffer.alloc(0);
+    const r = await contentRpc<{ session_id: string }>(
+      token,
+      'files/upload_session/start',
+      { close: false },
+      first,
+    );
+    sessionId = r.session_id;
+    offset += first.length;
+    pending = null;
+  }
+
+  const finishBody = pending ?? Buffer.alloc(0);
+  const result = await contentRpc<RawEntry>(
+    token,
+    'files/upload_session/finish',
+    {
+      cursor: { session_id: sessionId, offset },
+      commit: { path: toApiPath(path), mode: 'overwrite', autorename: false, mute: true },
+    },
+    finishBody,
+  );
+  onProgress?.(offset + finishBody.length);
+  return mapEntry(result);
 }
 
 /** Fetch a JPEG thumbnail for an image file. */

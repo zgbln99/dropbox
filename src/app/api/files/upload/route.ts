@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { guard, errorResponse } from '@/lib/api';
-import { uploadFile } from '@/lib/dropbox';
+import { uploadFile, uploadSession, SIMPLE_UPLOAD_LIMIT } from '@/lib/dropbox';
 import { isSafePath } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Single-request Dropbox upload limit. Larger files are rejected with 413.
-const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;
-
 /**
- * Raw-body upload. The destination path is passed via `?path=`.
- * The body is the file bytes (used by both the web UI and WebDAV PUT).
+ * Raw-body upload. The destination path is passed via `?path=`; the body is
+ * the file bytes (used by both the web UI and WebDAV PUT).
+ *
+ * Files of 150 MB or less are uploaded in a single request. Larger files —
+ * and any upload with no declared Content-Length — are streamed to Dropbox in
+ * 8 MB chunks via an upload session, so the whole file is never buffered.
+ *
+ * The JSON response reports the uploaded byte count for progress tracking.
  */
 export async function POST(req: Request) {
   const denied = guard(req);
@@ -27,16 +30,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
     }
 
-    const buf = Buffer.from(await req.arrayBuffer());
-    if (buf.length > MAX_UPLOAD_BYTES) {
-      return NextResponse.json(
-        { error: 'File exceeds the 150 MB upload limit' },
-        { status: 413 },
-      );
-    }
+    const contentLength = Number(req.headers.get('content-length') || '0');
+    const useSimpleUpload = contentLength > 0 && contentLength <= SIMPLE_UPLOAD_LIMIT;
 
-    const entry = await uploadFile(path, buf);
-    return NextResponse.json({ entry });
+    const entry = useSimpleUpload
+      ? await uploadFile(path, Buffer.from(await req.arrayBuffer()))
+      : await uploadSession(path, req.body);
+
+    return NextResponse.json({ entry, bytes: entry.size });
   } catch (err) {
     return errorResponse(err);
   }

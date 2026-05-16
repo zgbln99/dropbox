@@ -42,6 +42,40 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+/**
+ * Upload a single file via XHR so upload progress events are available.
+ * The server transparently switches to a chunked upload session for files
+ * larger than 150 MB.
+ */
+function xhrUpload(
+  dest: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/files/upload?path=${encodeURIComponent(dest)}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        let message = `Upload failed (${xhr.status})`;
+        try {
+          message = JSON.parse(xhr.responseText).error || message;
+        } catch {
+          /* keep default message */
+        }
+        reject(new Error(message));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(file);
+  });
+}
+
 export default function FileBrowser() {
   const router = useRouter();
   const [path, setPath] = useState('/');
@@ -51,7 +85,12 @@ export default function FileBrowser() {
   const [view, setView] = useState<'files' | 'shares'>('files');
   const [preview, setPreview] = useState<Entry | null>(null);
   const [shareTarget, setShareTarget] = useState<Entry | null>(null);
-  const [uploading, setUploading] = useState(0);
+  const [upload, setUpload] = useState<{
+    name: string;
+    index: number;
+    total: number;
+    percent: number;
+  } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const loadFolder = useCallback(async (p: string) => {
@@ -84,20 +123,21 @@ export default function FileBrowser() {
 
   async function handleUpload(files: FileList | null) {
     if (!files || !files.length) return;
-    setUploading(files.length);
+    const list = Array.from(files);
+    setError('');
     try {
-      for (const file of Array.from(files)) {
-        const dest = joinPath(path, file.name);
-        await jsonFetch(`/api/files/upload?path=${encodeURIComponent(dest)}`, {
-          method: 'POST',
-          body: file,
-        });
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i];
+        setUpload({ name: file.name, index: i + 1, total: list.length, percent: 0 });
+        await xhrUpload(joinPath(path, file.name), file, (percent) =>
+          setUpload((u) => (u ? { ...u, percent } : u)),
+        );
       }
       await loadFolder(path);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
-      setUploading(0);
+      setUpload(null);
       if (fileInput.current) fileInput.current.value = '';
     }
   }
@@ -201,10 +241,12 @@ export default function FileBrowser() {
               </button>
               <button
                 onClick={() => fileInput.current?.click()}
-                disabled={uploading > 0}
+                disabled={!!upload}
                 className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
               >
-                {uploading > 0 ? `Uploading ${uploading}…` : 'Upload'}
+                {upload
+                  ? `Uploading ${upload.index}/${upload.total} — ${upload.percent}%`
+                  : 'Upload'}
               </button>
               <input
                 ref={fileInput}
@@ -214,6 +256,21 @@ export default function FileBrowser() {
                 onChange={(e) => handleUpload(e.target.files)}
               />
             </div>
+
+            {upload && (
+              <div className="mb-3">
+                <div className="mb-1 flex justify-between text-xs text-slate-500">
+                  <span className="truncate">{upload.name}</span>
+                  <span>{upload.percent}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full bg-brand transition-all"
+                    style={{ width: `${upload.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {error && (
               <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>

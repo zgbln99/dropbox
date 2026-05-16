@@ -85,15 +85,6 @@ function davHref(dropboxPath, isDir) {
   return h;
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
-
 /** Call the loopback Next.js JSON API, forwarding the admin Basic auth. */
 async function apiCall(port, authHeader, method, path, body) {
   const headers = { Authorization: authHeader };
@@ -181,10 +172,16 @@ async function handleGet(req, res, port, auth, dropboxPath, headOnly) {
 }
 
 async function handlePut(req, res, port, auth, dropboxPath) {
-  const body = await readBody(req);
+  // Stream the request body straight through to the upload endpoint so large
+  // files are never buffered in memory. Forwarding Content-Length lets the
+  // upload route pick the single-request path for small files.
+  const headers = { Authorization: auth, 'Content-Type': 'application/octet-stream' };
+  if (req.headers['content-length']) {
+    headers['Content-Length'] = req.headers['content-length'];
+  }
   const up = await fetch(
     `http://127.0.0.1:${port}/api/files/upload?path=${encodeURIComponent(dropboxPath)}`,
-    { method: 'POST', headers: { Authorization: auth }, body },
+    { method: 'POST', headers, body: req, duplex: 'half' },
   );
   if (up.ok) return send(res, 201, 'Created');
   send(res, up.status === 413 ? 413 : 502, 'Upload failed');

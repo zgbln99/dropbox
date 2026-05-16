@@ -12,8 +12,9 @@ cached locally (under `./data/previews`).
 
 - 🔐 Admin login (username/password from environment variables)
 - 📂 Browse Dropbox folders and files on demand
-- ⬆️ Upload, ⬇️ download (download via temporary Dropbox links, so file bytes
-  bypass the VPS)
+- ⬆️ Upload files of any size — small files in one request, large files via
+  streaming chunked upload sessions — with a live progress bar
+- ⬇️ Download via temporary Dropbox links, so file bytes bypass the VPS
 - ✏️ Rename, 🗑️ delete, 📁 create folders
 - 🔗 Public share links with random tokens, optional password and optional
   expiry — stored in SQLite
@@ -111,7 +112,7 @@ server {
 
     # ssl_certificate / ssl_certificate_key ...
 
-    client_max_body_size 160m;   # allow uploads up to the 150 MB limit
+    client_max_body_size 0;      # allow large uploads (0 = no cap)
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -145,9 +146,15 @@ Basic auth over plain HTTP).
 
 ## Notes & limits
 
-- **Uploads** are limited to **150 MB** per file (Dropbox's single-request
-  upload limit). Larger files would require chunked upload sessions, omitted
-  here to keep the app lightweight.
+- **Uploads** support files of any size:
+  - Files **≤ 150 MB** use a single Dropbox `files/upload` request.
+  - Larger files (and any upload with no declared `Content-Length`) are sent
+    via a Dropbox **upload session** — `upload_session/start` →
+    `append_v2` → `finish` — streamed in **8 MB chunks**. The request body is
+    never fully buffered, so memory use stays around ~20 MB regardless of file
+    size. WebDAV `PUT` streams the same way.
+  - When uploading behind nginx, set `client_max_body_size` high enough (or
+    `0` to disable the cap) for the largest files you expect.
 - **Previews** are generated lazily and cached in `./data/previews`. PSD files
   are decoded with `ag-psd` and re-encoded to JPEG with `sharp`; image
   thumbnails are rendered by Dropbox itself to keep CPU/RAM usage low.
