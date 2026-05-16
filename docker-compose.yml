@@ -1,0 +1,16 @@
+services:
+  jrjr-drive:
+    build: .
+    image: jrjr-drive
+    container_name: jrjr-drive
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # Bind to localhost only — nginx terminates TLS and proxies to this.
+      - "127.0.0.1:3000:3000"
+    volumes:
+      # Persist the SQLite database and cached previews across restarts.
+      - ./data:/app/data
+    # Keep memory usage modest on a small VPS.
+    mem_limit: 512m
