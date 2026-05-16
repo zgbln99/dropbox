@@ -1,4 +1,6 @@
+import { headers } from 'next/headers';
 import { getShareByToken, isExpired } from '@/lib/db';
+import { rateLimit, getClientIp } from '@/lib/ratelimit';
 import SharePublic from '@/components/SharePublic';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +18,18 @@ function Notice({ title, message }: { title: string; message: string }) {
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+
+  // Per-IP rate limit on public share page views (counters stored in SQLite).
+  const ip = getClientIp(await headers());
+  if (!rateLimit(`sharepage:${ip}`, 60, 60).allowed) {
+    return (
+      <Notice
+        title="Too many requests"
+        message="You've opened too many share pages. Please wait a minute and try again."
+      />
+    );
+  }
+
   const share = getShareByToken(token);
 
   if (!share) {

@@ -18,6 +18,10 @@ cached locally (under `./data/previews`).
 - ✏️ Rename, 🗑️ delete, 📁 create folders
 - 🔗 Public share links with random tokens, optional password and optional
   expiry — stored in SQLite
+- ✍️ Share **downloads** use signed, short-lived URLs (5-minute HMAC
+  signatures), minted fresh per click
+- 🚦 Per-IP rate limiting on public share pages and downloads, with counters
+  persisted in SQLite
 - 👁️ Previews for images (`jpg jpeg png gif webp svg`), PDFs, native video
   playback, and **server-generated PSD thumbnails**
 - 💾 Generated previews cached in `./data/previews` (populated on first request)
@@ -160,6 +164,18 @@ Basic auth over plain HTTP).
   thumbnails are rendered by Dropbox itself to keep CPU/RAM usage low.
 - No background indexing or sync — every listing is an on-demand Dropbox call.
 - Share-link passwords are hashed with scrypt; only hashes are stored in SQLite.
+- **Signed downloads** — public download URLs carry an HMAC signature that
+  binds the share token + file path + an expiry timestamp, and are valid for
+  only 5 minutes. The web UI mints a fresh signed URL each time *Download* is
+  clicked, so links cannot be forwarded for long-term direct access. Inline
+  media (video/PDF) streams via a separate password-gated endpoint.
+- **Rate limiting** — public share access is rate limited per client IP, with
+  fixed-window counters stored in SQLite (one row per client, pruned
+  automatically). Defaults: 60 share-page views/min, 120 browse API calls/min,
+  30 downloads/min. API responses past the limit return HTTP `429` with a
+  `Retry-After` header. For correct per-IP limiting, ensure nginx forwards
+  `X-Forwarded-For` (the sample config above does). It uses only Node's
+  built-in `crypto` and SQLite — no extra dependencies.
 
 ## Project layout
 

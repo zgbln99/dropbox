@@ -63,6 +63,22 @@ export default function SharePublic({ token, name, isFolder, hasPassword, rootPa
     if (unlocked) load(path);
   }, [unlocked, path, load]);
 
+  // Downloads use a signed, short-lived URL minted fresh on each click.
+  const download = useCallback(
+    async (target: string) => {
+      setError('');
+      try {
+        const res = await fetch(api('sign', target));
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not start download');
+        window.location.href = data.url;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not start download');
+      }
+    },
+    [api],
+  );
+
   if (!unlocked) {
     return (
       <main className="flex min-h-screen items-center justify-center p-4">
@@ -105,12 +121,12 @@ export default function SharePublic({ token, name, isFolder, hasPassword, rootPa
       <Shell title={name}>
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
           <FilePreview entry={fileEntry} api={api} large />
-          <a
-            href={api('download', rootPath)}
+          <button
+            onClick={() => download(rootPath)}
             className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
           >
             Download
-          </a>
+          </button>
         </div>
       </Shell>
     );
@@ -163,12 +179,12 @@ export default function SharePublic({ token, name, isFolder, hasPassword, rootPa
                   {entry.tag === 'folder' ? '' : formatBytes(entry.size)}
                 </span>
                 {entry.tag === 'file' && (
-                  <a
-                    href={api('download', entry.path)}
+                  <button
+                    onClick={() => download(entry.path)}
                     className="text-xs text-brand hover:underline"
                   >
                     Download
-                  </a>
+                  </button>
                 )}
               </li>
             ))}
@@ -195,12 +211,12 @@ export default function SharePublic({ token, name, isFolder, hasPassword, rootPa
               <FilePreview entry={preview} api={api} large />
             </div>
             <div className="border-t border-slate-200 p-3 text-right">
-              <a
-                href={api('download', preview.path)}
+              <button
+                onClick={() => download(preview.path)}
                 className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white hover:bg-brand-dark"
               >
                 Download
-              </a>
+              </button>
             </div>
           </div>
         </div>
@@ -233,7 +249,7 @@ function FilePreview({
   large?: boolean;
 }) {
   const kind = fileKind(entry.name);
-  const raw = api('download', entry.path);
+  const raw = api('view', entry.path);
   const prev = api('preview', entry.path, entry.rev || undefined);
   const cls = large ? 'max-h-[70vh]' : 'max-h-48';
 
