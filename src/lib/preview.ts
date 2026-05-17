@@ -136,7 +136,7 @@ async function loadAgPsd() {
  * RAM, plus the file buffer, plus the encoder). Larger documents fall back to
  * the small thumbnail Photoshop embeds in the file.
  */
-const COMPOSITE_MP_LIMIT = 64;
+const COMPOSITE_MP_LIMIT = 200;
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : 'unknown error';

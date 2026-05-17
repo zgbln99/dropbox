@@ -5,6 +5,7 @@ import { fileKind, formatBytes, formatDate, isWithin, type FileKind } from '@/li
 import { useSettings } from '@/lib/settings';
 import {
   FileGlyph,
+  IconAlert,
   IconArrowLeft,
   IconArrowRight,
   IconChevron,
@@ -417,15 +418,46 @@ function ShareRow({
   );
 }
 
+function PreviewImage({ src, alt }: { src: string; alt: string }) {
+  const { t } = useSettings();
+  const [error, setError] = useState<string | null>(null);
+
+  if (error) {
+    return (
+      <div className="flex max-w-md flex-col items-center px-6 py-16 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-500">
+          <IconAlert className="h-7 w-7" />
+        </div>
+        <p className="mt-4 text-sm font-medium text-strong">{t('previewUnavailable')}</p>
+        <p className="mt-1 text-sm text-muted">{error}</p>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={async () => {
+        try {
+          const res = await fetch(src);
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          setError(data.error || `Preview failed (${res.status})`);
+        } catch {
+          setError('Preview failed');
+        }
+      }}
+      className="max-h-[72vh] rounded-lg object-contain shadow-sm"
+    />
+  );
+}
+
 function FilePreview({ entry, api }: { entry: Entry; api: ShareApi }) {
   const kind = fileKind(entry.name);
   const raw = api('view', entry.path);
   const prev = api('preview', entry.path, entry.rev || undefined);
 
   if (kind === 'image' || kind === 'svg' || kind === 'psd') {
-    return (
-      <img src={prev} alt={entry.name} className="max-h-[72vh] rounded-lg object-contain shadow-sm" />
-    );
+    return <PreviewImage src={prev} alt={entry.name} />;
   }
   if (kind === 'video') {
     return <video src={raw} controls className="max-h-[72vh] w-full rounded-lg" />;

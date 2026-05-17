@@ -110,6 +110,7 @@ const en = {
   copyLink: 'Copy link',
 
   noPreview: 'No preview for this file type.',
+  previewUnavailable: 'Preview unavailable',
   downloadFile: 'Download file',
   prevFile: 'Previous',
   nextFile: 'Next',
@@ -226,6 +227,7 @@ const pl: Record<Key, string> = {
   copyLink: 'Kopiuj link',
 
   noPreview: 'Brak podglądu dla tego typu pliku.',
+  previewUnavailable: 'Podgląd niedostępny',
   downloadFile: 'Pobierz plik',
   prevFile: 'Poprzedni',
   nextFile: 'Następny',

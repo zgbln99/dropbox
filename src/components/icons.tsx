@@ -323,6 +323,16 @@ export function IconGlobe(p: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconAlert(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <path d="M12 4 2.5 20.5h19L12 4Z" />
+      <path d="M12 10v4.5" />
+      <path d="M12 17.6h.01" />
+    </Icon>
+  );
+}
+
 export function IconSearch(p: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...p}>
