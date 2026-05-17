@@ -112,7 +112,7 @@ Run jrjr-drive bound to localhost and let nginx terminate TLS:
 ```nginx
 server {
     listen 443 ssl;
-    server_name files.jrjr.pl;
+    server_name jrjr.online;
 
     # ssl_certificate / ssl_certificate_key ...
 
@@ -135,13 +135,13 @@ server {
 
 ## Mounting as a Windows network drive (WebDAV)
 
-The WebDAV endpoint lives at `https://files.jrjr.pl/dav` and authenticates with
+The WebDAV endpoint lives at `https://jrjr.online/dav` and authenticates with
 the **same admin username/password**.
 
 In Windows Explorer → *Map network drive* → enter:
 
 ```
-https://files.jrjr.pl/dav
+https://jrjr.online/dav
 ```
 
 Tick *Connect using different credentials* and enter `ADMIN_USER` /
