@@ -7,8 +7,10 @@ services:
     env_file:
       - .env
     ports:
-      # Bind to localhost only — nginx terminates TLS and proxies to this.
-      - "127.0.0.1:3000:3000"
+      # Host port 3001 -> container port 3000. Bind to localhost only; nginx
+      # terminates TLS and proxies to this. Host 3000 is used by another
+      # service, so the portal is exposed on 3001.
+      - "127.0.0.1:3001:3000"
     volumes:
       # Persist the SQLite database and cached previews across restarts.
       - ./data:/app/data
