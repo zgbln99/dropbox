@@ -189,6 +189,34 @@ export async function downloadContent(path: string, timeoutMs = 60_000): Promise
   return res;
 }
 
+/**
+ * Download a folder as a ZIP archive through the Dropbox content API.
+ * Dropbox caps this at 20 GB / 10,000 files per folder.
+ */
+export async function downloadZip(path: string, timeoutMs = 300_000): Promise<Response> {
+  const token = await getAccessToken();
+  let res: Response;
+  try {
+    res = await fetch('https://content.dropboxapi.com/2/files/download_zip', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Dropbox-API-Arg': apiArg({ path: toApiPath(path) }),
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new DropboxError(504, `Zip download timed out after ${timeoutMs}ms`);
+    }
+    throw new DropboxError(502, `Zip request failed: ${err instanceof Error ? err.message : err}`);
+  }
+  if (!res.ok) {
+    throw new DropboxError(res.status, await res.text());
+  }
+  return res;
+}
+
 /** Largest file size Dropbox accepts in a single `files/upload` request. */
 export const SIMPLE_UPLOAD_LIMIT = 150 * 1024 * 1024;
 

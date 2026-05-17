@@ -670,7 +670,7 @@ function ActionMenu({ entry, onShare, onRename, onDelete }: EntryActions) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="menu absolute right-0 top-full z-30 mt-1.5 w-44 animate-pop-in">
-            {entry.tag === 'file' && (
+            {entry.tag === 'file' ? (
               <a
                 href={`/api/files/download?path=${encodeURIComponent(entry.path)}`}
                 onClick={() => setOpen(false)}
@@ -678,6 +678,15 @@ function ActionMenu({ entry, onShare, onRename, onDelete }: EntryActions) {
               >
                 <IconDownload className="h-4 w-4 text-slate-400" />
                 {t('download')}
+              </a>
+            ) : (
+              <a
+                href={`/api/files/download-zip?path=${encodeURIComponent(entry.path)}`}
+                onClick={() => setOpen(false)}
+                className="menu-item"
+              >
+                <IconDownload className="h-4 w-4 text-slate-400" />
+                {t('downloadZip')}
               </a>
             )}
             <button
