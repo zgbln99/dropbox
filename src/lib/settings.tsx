@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { translate, type Lang, type TranslationKey } from './i18n';
 
-export type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark' | 'system';
 export type ViewMode = 'grid' | 'list';
 export type SortKey = 'name' | 'date' | 'size';
 export type TileSize = 'sm' | 'md' | 'lg';
@@ -56,17 +56,32 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
-  // Apply the theme and persist — only once hydrated, so the inline script's
-  // pre-paint theme is never briefly overridden by the default.
+  // Persist settings — only once hydrated, so the default never overwrites
+  // stored values before they are loaded.
   useEffect(() => {
     if (!hydrated) return;
-    document.documentElement.classList.toggle('dark', settings.theme === 'dark');
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch {
       /* ignore quota / privacy errors */
     }
   }, [settings, hydrated]);
+
+  // Apply the theme. With 'system', follow the OS preference live.
+  useEffect(() => {
+    if (!hydrated) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark =
+        settings.theme === 'dark' || (settings.theme === 'system' && mq.matches);
+      document.documentElement.classList.toggle('dark', dark);
+    };
+    apply();
+    if (settings.theme === 'system') {
+      mq.addEventListener('change', apply);
+      return () => mq.removeEventListener('change', apply);
+    }
+  }, [settings.theme, hydrated]);
 
   const set = useCallback<SettingsContextValue['set']>((key, value) => {
     setSettings((s) => ({ ...s, [key]: value }));

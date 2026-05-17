@@ -4,7 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fileKind, formatBytes, formatDate, joinPath, type FileKind } from '@/lib/utils';
 import { useSettings, type SortKey, type TileSize } from '@/lib/settings';
+import { useToast } from '@/lib/toast';
 import type { TranslationKey } from '@/lib/i18n';
+
+interface InputDialogState {
+  title: string;
+  label: string;
+  initial: string;
+  confirmLabel: string;
+  onSubmit: (value: string) => void;
+}
+
+interface ConfirmState {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+}
 import AppShell, { type AppView } from './AppShell';
 import SettingsPanel from './SettingsPanel';
 import {
@@ -163,7 +179,10 @@ function FilesView() {
   const [filter, setFilter] = useState<FilterKind>('all');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Entry | null>(null);
+  const [inputDialog, setInputDialog] = useState<InputDialogState | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null);
   const [dragging, setDragging] = useState(false);
+  const toast = useToast();
   const [upload, setUpload] = useState<{
     name: string;
     index: number;
@@ -209,58 +228,81 @@ function FilesView() {
           );
         }
         await loadFolder(path);
+        toast('success', t('toastUploaded'));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Upload failed');
+        toast('error', e instanceof Error ? e.message : 'Upload failed');
       } finally {
         setUpload(null);
         if (fileInput.current) fileInput.current.value = '';
       }
     },
-    [path, loadFolder],
+    [path, loadFolder, toast, t],
   );
 
-  async function newFolder() {
-    const name = window.prompt(t('newFolderPrompt'));
-    if (!name) return;
-    try {
-      await jsonFetch('/api/files/mkdir', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parent: path, name }),
-      });
-      await loadFolder(path);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create folder');
-    }
+  function newFolder() {
+    setInputDialog({
+      title: t('newFolder'),
+      label: t('folderName'),
+      initial: '',
+      confirmLabel: t('create'),
+      onSubmit: async (name) => {
+        try {
+          await jsonFetch('/api/files/mkdir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parent: path, name }),
+          });
+          await loadFolder(path);
+          toast('success', t('toastFolderCreated'));
+        } catch (e) {
+          toast('error', e instanceof Error ? e.message : 'Could not create folder');
+        }
+      },
+    });
   }
 
-  async function rename(entry: Entry) {
-    const name = window.prompt(t('renamePrompt'), entry.name);
-    if (!name || name === entry.name) return;
-    try {
-      await jsonFetch('/api/files/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: entry.path, name }),
-      });
-      await loadFolder(path);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Rename failed');
-    }
+  function rename(entry: Entry) {
+    setInputDialog({
+      title: t('rename'),
+      label: t('nameLabel'),
+      initial: entry.name,
+      confirmLabel: t('save'),
+      onSubmit: async (name) => {
+        if (name === entry.name) return;
+        try {
+          await jsonFetch('/api/files/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: entry.path, name }),
+          });
+          await loadFolder(path);
+          toast('success', t('toastRenamed'));
+        } catch (e) {
+          toast('error', e instanceof Error ? e.message : 'Rename failed');
+        }
+      },
+    });
   }
 
-  async function remove(entry: Entry) {
-    if (!window.confirm(t('deleteConfirm', { name: entry.name }))) return;
-    try {
-      await jsonFetch('/api/files/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: entry.path }),
-      });
-      await loadFolder(path);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
-    }
+  function remove(entry: Entry) {
+    setConfirmDialog({
+      title: t('delete'),
+      message: t('deleteConfirm', { name: entry.name }),
+      confirmLabel: t('delete'),
+      onConfirm: async () => {
+        try {
+          await jsonFetch('/api/files/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: entry.path }),
+          });
+          await loadFolder(path);
+          toast('success', t('toastDeleted'));
+        } catch (e) {
+          toast('error', e instanceof Error ? e.message : 'Delete failed');
+        }
+      },
+    });
   }
 
   const crumbs = path === '/' ? [] : path.split('/').filter(Boolean);
@@ -494,6 +536,98 @@ function FilesView() {
       {shareTarget && (
         <ShareDialog entry={shareTarget} onClose={() => setShareTarget(null)} />
       )}
+      {inputDialog && (
+        <InputDialog state={inputDialog} onClose={() => setInputDialog(null)} />
+      )}
+      {confirmDialog && (
+        <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />
+      )}
+    </div>
+  );
+}
+
+function InputDialog({
+  state,
+  onClose,
+}: {
+  state: InputDialogState;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [value, setValue] = useState(state.initial);
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    state.onSubmit(trimmed);
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <form
+        className="modal-panel w-full max-w-sm p-6"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={submit}
+      >
+        <h2 className="text-base font-semibold text-strong">{state.title}</h2>
+        <label className="mt-4 block text-sm font-medium text-strong">
+          {state.label}
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            className="input mt-1.5"
+          />
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-soft">
+            {t('cancel')}
+          </button>
+          <button type="submit" className="btn-primary">
+            {state.confirmLabel}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  state,
+  onClose,
+}: {
+  state: ConfirmState;
+  onClose: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/15 text-red-500">
+            <IconAlert className="h-5 w-5" />
+          </div>
+          <h2 className="text-base font-semibold text-strong">{state.title}</h2>
+        </div>
+        <p className="mt-3 text-sm text-muted">{state.message}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="btn-soft">
+            {t('cancel')}
+          </button>
+          <button
+            onClick={() => {
+              state.onConfirm();
+              onClose();
+            }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+          >
+            {state.confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1109,11 +1243,13 @@ function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) 
 
 function SharesPanel() {
   const t = useT();
+  const toast = useToast();
   const [shares, setShares] = useState<ShareView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [editing, setEditing] = useState<ShareView | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1131,15 +1267,27 @@ function SharesPanel() {
     load();
   }, [load]);
 
-  async function revoke(id: number) {
-    if (!window.confirm(t('revokeConfirm'))) return;
-    await fetch(`/api/shares/${id}`, { method: 'DELETE' });
-    await load();
+  function revoke(id: number) {
+    setConfirmDialog({
+      title: t('revoke'),
+      message: t('revokeConfirm'),
+      confirmLabel: t('revoke'),
+      onConfirm: async () => {
+        try {
+          await fetch(`/api/shares/${id}`, { method: 'DELETE' });
+          await load();
+          toast('success', t('toastShareRevoked'));
+        } catch (e) {
+          toast('error', e instanceof Error ? e.message : 'Could not revoke link');
+        }
+      },
+    });
   }
 
   function copy(id: number, url: string) {
     navigator.clipboard?.writeText(url);
     setCopiedId(id);
+    toast('success', t('toastLinkCopied'));
     setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 1800);
   }
 
@@ -1243,6 +1391,9 @@ function SharesPanel() {
             load();
           }}
         />
+      )}
+      {confirmDialog && (
+        <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />
       )}
     </div>
   );

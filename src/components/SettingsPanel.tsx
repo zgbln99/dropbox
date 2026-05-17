@@ -127,6 +127,7 @@ export default function SettingsPanel() {
             options={[
               { value: 'light', label: t('themeLight'), icon: <IconSun className="h-4 w-4" /> },
               { value: 'dark', label: t('themeDark'), icon: <IconMoon className="h-4 w-4" /> },
+              { value: 'system', label: t('themeSystem') },
             ]}
           />
         </Row>
