@@ -323,6 +323,40 @@ export function IconGlobe(p: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconPlay(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <path d="M7 5v14l12-7Z" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+export function IconPause(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none" />
+      <rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+export function IconExpand(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <path d="M9 4H4v5M15 4h5v5M15 20h5v-5M9 20H4v-5" />
+    </Icon>
+  );
+}
+
+export function IconRestore(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <path d="M4 12a8 8 0 1 1 2.5 5.8" />
+      <path d="M4 20v-5h5" />
+    </Icon>
+  );
+}
+
 export function IconAlert(p: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...p}>

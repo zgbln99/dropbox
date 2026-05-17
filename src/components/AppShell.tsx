@@ -2,14 +2,23 @@
 
 import { useState, type ReactNode } from 'react';
 import { useT } from '@/lib/settings';
-import { IconCloud, IconFiles, IconLink, IconSettings, IconLogout, IconMenu } from './icons';
+import {
+  IconCloud,
+  IconFiles,
+  IconLink,
+  IconSettings,
+  IconLogout,
+  IconMenu,
+  IconTrash,
+} from './icons';
 import type { TranslationKey } from '@/lib/i18n';
 
-export type AppView = 'files' | 'shares' | 'settings';
+export type AppView = 'files' | 'shares' | 'trash' | 'settings';
 
 const NAV: { id: AppView; Icon: typeof IconFiles; label: TranslationKey }[] = [
   { id: 'files', Icon: IconFiles, label: 'navFiles' },
   { id: 'shares', Icon: IconLink, label: 'navShared' },
+  { id: 'trash', Icon: IconTrash, label: 'navTrash' },
   { id: 'settings', Icon: IconSettings, label: 'navSettings' },
 ];
 

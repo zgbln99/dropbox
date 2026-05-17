@@ -400,6 +400,47 @@ export async function deletePath(path: string): Promise<void> {
   await rpc('files/delete_v2', { path: toApiPath(path) });
 }
 
+export interface DeletedEntry {
+  name: string;
+  path: string;
+}
+
+/**
+ * List recently deleted files across the account. Dropbox has no dedicated
+ * "trash" endpoint, so this walks the tree with `include_deleted` and keeps
+ * only the deleted entries (capped, since the walk also returns live files).
+ */
+export async function listDeleted(): Promise<DeletedEntry[]> {
+  let res = await rpc<{ entries: RawEntry[]; cursor: string; has_more: boolean }>(
+    'files/list_folder',
+    { path: '', recursive: true, include_deleted: true, limit: 2000 },
+  );
+  let all = res.entries;
+  let pages = 1;
+  while (res.has_more && pages < 6) {
+    res = await rpc('files/list_folder/continue', { cursor: res.cursor });
+    all = all.concat(res.entries);
+    pages++;
+  }
+  return all
+    .filter((e) => e['.tag'] === 'deleted')
+    .map((e) => ({ name: e.name, path: e.path_display || e.path_lower || `/${e.name}` }))
+    .slice(0, 200);
+}
+
+/** Restore a deleted file to its most recent revision. */
+export async function restorePath(path: string): Promise<void> {
+  const revs = await rpc<{ entries: { rev: string }[] }>('files/list_revisions', {
+    path: toApiPath(path),
+    limit: 1,
+  });
+  const rev = revs.entries?.[0]?.rev;
+  if (!rev) {
+    throw new DropboxError(404, 'No revision available to restore (folders cannot be restored)');
+  }
+  await rpc('files/restore', { path: toApiPath(path), rev });
+}
+
 export async function movePath(from: string, to: string): Promise<DbxEntry> {
   const res = await rpc<{ metadata: RawEntry }>('files/move_v2', {
     from_path: toApiPath(from),

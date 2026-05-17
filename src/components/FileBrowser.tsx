@@ -33,6 +33,7 @@ import {
   IconClose,
   IconCopy,
   IconDownload,
+  IconExpand,
   IconEye,
   IconFilter,
   IconFolderPlus,
@@ -41,7 +42,10 @@ import {
   IconList,
   IconLock,
   IconMore,
+  IconPause,
   IconPencil,
+  IconPlay,
+  IconRestore,
   IconSearch,
   IconShare,
   IconTrash,
@@ -162,6 +166,7 @@ export default function FileBrowser() {
     <AppShell view={view} onNavigate={setView} onSignOut={logout}>
       {view === 'files' && <FilesView />}
       {view === 'shares' && <SharesPanel />}
+      {view === 'trash' && <TrashPanel />}
       {view === 'settings' && <SettingsPanel />}
     </AppShell>
   );
@@ -966,16 +971,44 @@ function PreviewModal({
   const entry = files[index];
   const hasPrev = index > 0;
   const hasNext = index < files.length - 1;
+  const [playing, setPlaying] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !document.fullscreenElement) onClose();
       if (e.key === 'ArrowLeft' && index > 0) onIndex(index - 1);
       if (e.key === 'ArrowRight' && index < files.length - 1) onIndex(index + 1);
+      if (e.key === ' ') {
+        e.preventDefault();
+        setPlaying((p) => !p);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [index, files.length, onIndex, onClose]);
+
+  // Slideshow: advance every 4s, looping back to the start.
+  useEffect(() => {
+    if (!playing || files.length < 2) return;
+    const id = setTimeout(() => onIndex((index + 1) % files.length), 4000);
+    return () => clearTimeout(id);
+  }, [playing, index, files.length, onIndex]);
+
+  useEffect(() => {
+    const onFs = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      backdropRef.current?.requestFullscreen().catch(() => {});
+    }
+  }
 
   const kind = fileKind(entry.name);
   const raw = `/api/files/download?path=${encodeURIComponent(entry.path)}`;
@@ -984,7 +1017,7 @@ function PreviewModal({
   )}`;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" ref={backdropRef} onClick={onClose}>
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -1007,7 +1040,7 @@ function PreviewModal({
       </button>
 
       <div
-        className="modal-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden"
+        className="modal-panel flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b divider px-4 py-3">
@@ -1018,6 +1051,18 @@ function PreviewModal({
               {index + 1} / {files.length}
             </p>
           </div>
+          {files.length > 1 && (
+            <button
+              onClick={() => setPlaying((p) => !p)}
+              className="btn-icon"
+              title={playing ? t('pauseSlideshow') : t('playSlideshow')}
+            >
+              {playing ? <IconPause className="h-[18px] w-[18px]" /> : <IconPlay className="h-[18px] w-[18px]" />}
+            </button>
+          )}
+          <button onClick={toggleFullscreen} className="btn-icon" title={t('fullscreen')}>
+            <IconExpand className={fullscreen ? 'h-[18px] w-[18px] text-brand' : 'h-[18px] w-[18px]'} />
+          </button>
           <a href={raw} className="btn-secondary">
             <IconDownload className="h-4 w-4" />
             <span className="hidden sm:inline">{t('download')}</span>
@@ -1030,9 +1075,9 @@ function PreviewModal({
           {kind === 'image' || kind === 'svg' || kind === 'psd' ? (
             <PreviewImage src={prev} alt={entry.name} />
           ) : kind === 'video' ? (
-            <video src={raw} controls className="max-h-[72vh] w-full rounded-lg" />
+            <video src={raw} controls className="max-h-[80vh] w-full rounded-lg" />
           ) : kind === 'pdf' ? (
-            <iframe src={raw} className="h-[72vh] w-full rounded-lg" title={entry.name} />
+            <iframe src={raw} className="h-[80vh] w-full rounded-lg" title={entry.name} />
           ) : (
             <div className="flex flex-col items-center py-12 text-center">
               <FileGlyph kind={kind} className="h-16 w-16 rounded-2xl" iconClassName="h-8 w-8" />
@@ -1394,6 +1439,102 @@ function SharesPanel() {
       )}
       {confirmDialog && (
         <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Trash */
+
+function TrashPanel() {
+  const t = useT();
+  const toast = useToast();
+  const [entries, setEntries] = useState<{ name: string; path: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [restoring, setRestoring] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await jsonFetch<{ entries: { name: string; path: string }[] }>(
+        '/api/files/trash',
+      );
+      setEntries(data.entries);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load trash');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function restore(path: string) {
+    setRestoring(path);
+    try {
+      await jsonFetch('/api/files/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      setEntries((list) => list.filter((e) => e.path !== path));
+      toast('success', t('toastRestored'));
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Could not restore file');
+    } finally {
+      setRestoring(null);
+    }
+  }
+
+  return (
+    <div>
+      <h1 className="mb-5 text-xl font-semibold text-strong">{t('navTrash')}</h1>
+
+      {loading ? (
+        <p className="py-10 text-center text-sm text-faint">{t('loading')}</p>
+      ) : error ? (
+        <p className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </p>
+      ) : !entries.length ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.06] dark:text-slate-500">
+            <IconTrash className="h-7 w-7" />
+          </div>
+          <p className="mt-4 text-sm font-medium text-strong">{t('trashEmptyTitle')}</p>
+          <p className="mt-1 text-sm text-faint">{t('trashEmptyHint')}</p>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          {entries.map((entry) => (
+            <div
+              key={entry.path}
+              className="flex items-center gap-3 border-b divider px-4 py-2.5 last:border-b-0"
+            >
+              <FileGlyph
+                kind={fileKind(entry.name)}
+                className="h-9 w-9"
+                iconClassName="h-[18px] w-[18px]"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-strong">{entry.name}</p>
+                <p className="truncate text-xs text-faint">{entry.path}</p>
+              </div>
+              <button
+                onClick={() => restore(entry.path)}
+                disabled={restoring === entry.path}
+                className="btn-secondary"
+              >
+                <IconRestore className="h-4 w-4" />
+                <span className="hidden sm:inline">{t('restore')}</span>
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
