@@ -7,6 +7,13 @@ import { fileKind } from './utils';
 /** Disk cache for generated previews. Populated lazily, on first request. */
 const PREVIEW_DIR = path.join(process.cwd(), 'data', 'previews');
 
+/**
+ * Largest PSD file accepted for preview. The whole file is buffered in memory
+ * to parse it, so anything bigger risks an out-of-memory kill in a
+ * memory-capped container.
+ */
+const MAX_PSD_BYTES = 256 * 1024 * 1024;
+
 /** Error type carrying an HTTP status, used for clear client responses. */
 export class PreviewError extends Error {
   status: number;
@@ -123,25 +130,81 @@ async function loadAgPsd() {
  * Render a PSD to a JPEG preview. ag-psd decodes the flattened composite into
  * raw RGBA pixels, then sharp resizes and encodes the result.
  */
-async function renderPsd(buffer: Buffer): Promise<Buffer> {
-  log(`renderPsd: ${buffer.length} bytes — checking signature`);
+/**
+ * Above this many megapixels the flattened composite is too large to decode
+ * safely in a memory-capped container (decoding needs width*height*4 bytes of
+ * RAM, plus the file buffer, plus the encoder). Larger documents fall back to
+ * the small thumbnail Photoshop embeds in the file.
+ */
+const COMPOSITE_MP_LIMIT = 24;
+
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : 'unknown error';
+}
+
+async function renderPsd(ab: ArrayBuffer): Promise<Buffer> {
+  const bytes = new Uint8Array(ab);
+  log(`renderPsd: ${bytes.length} bytes — checking signature`);
 
   // PSD/PSB files start with the "8BPS" magic signature. Anything else means
   // the download returned something unexpected (e.g. an error payload).
-  if (buffer.length < 4 || buffer.toString('latin1', 0, 4) !== '8BPS') {
+  if (
+    bytes.length < 26 ||
+    bytes[0] !== 0x38 ||
+    bytes[1] !== 0x42 ||
+    bytes[2] !== 0x50 ||
+    bytes[3] !== 0x53
+  ) {
     throw new PreviewError(422, 'Downloaded file is not a valid PSD document');
   }
 
+  // The header stores height/width as big-endian uint32s at offsets 14 and 18.
+  const dv = new DataView(ab);
+  const height = dv.getUint32(14);
+  const width = dv.getUint32(18);
+  const megapixels = (width * height) / 1_000_000;
+  log(`PSD document ${width}x${height} (${megapixels.toFixed(1)} MP)`);
+
+  const { readPsd } = await loadAgPsd();
+  const sharp = (await import('sharp')).default;
+
+  // Large document: decode only the embedded thumbnail. With both layer and
+  // composite image data skipped, ag-psd never allocates the huge pixel
+  // buffer, so memory use stays bounded regardless of the document size.
+  if (megapixels > COMPOSITE_MP_LIMIT) {
+    log(`document exceeds ${COMPOSITE_MP_LIMIT} MP — using embedded thumbnail`);
+    let psd;
+    try {
+      psd = readPsd(ab, {
+        skipLayerImageData: true,
+        skipCompositeImageData: true,
+        useRawThumbnail: true,
+      });
+    } catch (err) {
+      throw new PreviewError(422, `Could not parse PSD: ${errMsg(err)}`);
+    }
+    const thumb = psd.imageResources?.thumbnailRaw;
+    if (!thumb?.data?.length) {
+      throw new PreviewError(
+        413,
+        'PSD is too large to render and has no embedded thumbnail ' +
+          '(re-save with "Maximize Compatibility" enabled)',
+      );
+    }
+    // thumbnailRaw.data holds the thumbnail as a JPEG byte stream.
+    log(`embedded thumbnail ${thumb.width}x${thumb.height}, ${thumb.data.length} JPEG bytes`);
+    const jpeg = await sharp(Buffer.from(thumb.data))
+      .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    log(`JPEG encoded from thumbnail: ${jpeg.length} bytes`);
+    return jpeg;
+  }
+
+  // Small enough — decode the full composite for a crisp, full-quality preview.
   let psd;
   try {
-    log('loading ag-psd');
-    const { readPsd } = await loadAgPsd();
-    // ag-psd expects a plain ArrayBuffer; copy into one exactly sized.
-    const ab = buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    ) as ArrayBuffer;
-    log('decoding PSD with readPsd (this runs synchronously)');
+    log('decoding PSD composite with readPsd (this runs synchronously)');
     psd = readPsd(ab, {
       skipLayerImageData: true,
       skipThumbnail: true,
@@ -149,10 +212,7 @@ async function renderPsd(buffer: Buffer): Promise<Buffer> {
     });
     log('readPsd finished');
   } catch (err) {
-    throw new PreviewError(
-      422,
-      `Could not parse PSD: ${err instanceof Error ? err.message : 'unknown error'}`,
-    );
+    throw new PreviewError(422, `Could not parse PSD: ${errMsg(err)}`);
   }
 
   const image = psd.imageData;
@@ -175,7 +235,6 @@ async function renderPsd(buffer: Buffer): Promise<Buffer> {
     );
   }
 
-  const sharp = (await import('sharp')).default;
   const raw = Buffer.from(image.data.buffer, image.data.byteOffset, expected);
   const jpeg = await sharp(raw, {
     raw: { width: image.width, height: image.height, channels: 4 },
@@ -225,10 +284,19 @@ export async function getPreview(
   if (kind === 'psd') {
     log(`downloading PSD from Dropbox: ${dbxPath}`);
     const res = await downloadContent(dbxPath);
-    log(`PSD download response: status=${res.status} content-length=${res.headers.get('content-length') ?? '?'}`);
+    const declared = Number(res.headers.get('content-length') ?? 0);
+    log(`PSD download response: status=${res.status} content-length=${declared || '?'}`);
+    // The whole file must be held in memory to parse it; refuse files large
+    // enough to risk an out-of-memory kill before they are even read.
+    if (declared > MAX_PSD_BYTES) {
+      throw new PreviewError(
+        413,
+        `PSD file is too large to preview (${Math.round(declared / 1048576)} MB)`,
+      );
+    }
     const ab = await res.arrayBuffer();
     log(`PSD body read into memory: ${ab.byteLength} bytes`);
-    body = await renderPsd(Buffer.from(ab));
+    body = await renderPsd(ab);
   } else {
     // Dropbox renders image thumbnails server-side — cheap on the VPS.
     body = await getThumbnail(dbxPath, 'w1024h768');
