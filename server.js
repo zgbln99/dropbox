@@ -16,7 +16,10 @@ const { handleWebDav } = require('./webdav');
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3000', 10);
-const hostname = process.env.HOSTNAME || '0.0.0.0';
+// Bind to all interfaces by default. NOT process.env.HOSTNAME — Docker sets
+// that to the container ID, which would bind to the container IP only and
+// break the WebDAV module's loopback calls to 127.0.0.1.
+const hostname = process.env.BIND_HOST || '0.0.0.0';
 
 // Ensure runtime data directories exist (SQLite db + cached previews).
 for (const dir of ['data', 'data/previews']) {
