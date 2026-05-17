@@ -35,7 +35,7 @@ export default function AppShell({
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm shadow-indigo-500/30">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white shadow-sm shadow-indigo-500/30">
           <IconCloud className="h-5 w-5" />
         </div>
         <span className="text-base font-semibold tracking-tight text-strong">jrjr-drive</span>
@@ -50,8 +50,8 @@ export default function AppShell({
               onClick={() => go(id)}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 active
-                  ? 'bg-brand text-white shadow-sm shadow-indigo-500/30'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                  ? 'bg-brand text-white shadow-glow'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.05]'
               }`}
             >
               <Icon className="h-[18px] w-[18px]" />
@@ -64,7 +64,7 @@ export default function AppShell({
       <div className="border-t divider p-3">
         <button
           onClick={onSignOut}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.05]"
         >
           <IconLogout className="h-[18px] w-[18px]" />
           {t('signOut')}
@@ -87,7 +87,7 @@ export default function AppShell({
             className="absolute inset-0 animate-fade-in bg-slate-900/50 backdrop-blur-sm"
             onClick={() => setDrawer(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-64 animate-fade-in border-r divider bg-white dark:bg-slate-900">
+          <aside className="absolute inset-y-0 left-0 w-64 animate-fade-in border-r divider bg-white dark:bg-[#0c1120]">
             {sidebar}
           </aside>
         </div>
@@ -100,7 +100,7 @@ export default function AppShell({
             <IconMenu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-cyan-400 text-white">
               <IconCloud className="h-4 w-4" />
             </div>
             <span className="text-sm font-semibold text-strong">

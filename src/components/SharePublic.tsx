@@ -148,7 +148,7 @@ export default function SharePublic({
     return (
       <Shell title={name}>
         <div className="card overflow-hidden">
-          <div className="flex min-h-[320px] items-center justify-center bg-slate-50 p-6 dark:bg-slate-900/60">
+          <div className="flex min-h-[320px] items-center justify-center bg-slate-50 p-6 dark:bg-black/30">
             <FilePreview entry={fileEntry} api={api} />
           </div>
           <div className="flex items-center justify-between gap-3 border-t divider px-4 py-3">
@@ -177,7 +177,7 @@ export default function SharePublic({
         <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-sm">
           <button
             onClick={() => setPath(rootPath)}
-            className={`rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+            className={`rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-white/[0.05] ${
               rel.length ? 'text-muted' : 'text-strong'
             }`}
           >
@@ -188,10 +188,10 @@ export default function SharePublic({
             const last = i === rel.length - 1;
             return (
               <span key={target} className="flex min-w-0 items-center">
-                <IconChevron className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
+                <IconChevron className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500" />
                 <button
                   onClick={() => setPath(target)}
-                  className={`truncate rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                  className={`truncate rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-white/[0.05] ${
                     last ? 'text-strong' : 'text-muted'
                   }`}
                 >
@@ -201,12 +201,12 @@ export default function SharePublic({
             );
           })}
         </nav>
-        <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+        <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-white/[0.06]">
           <button
             onClick={() => set('view', 'grid')}
             className={`rounded-lg p-1.5 transition ${
               view === 'grid'
-                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-slate-100'
                 : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
@@ -216,7 +216,7 @@ export default function SharePublic({
             onClick={() => set('view', 'list')}
             className={`rounded-lg p-1.5 transition ${
               view === 'list'
-                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-slate-100'
                 : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
@@ -234,7 +234,7 @@ export default function SharePublic({
       {loading ? (
         <p className="py-12 text-center text-sm text-faint">{t('loading')}</p>
       ) : entries.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-white/50 py-12 text-center text-sm text-faint dark:border-slate-700 dark:bg-slate-800/40">
+        <p className="rounded-2xl border border-dashed border-slate-300 bg-white/50 py-12 text-center text-sm text-faint dark:border-white/[0.08] dark:bg-white/[0.02]">
           {t('emptyTitle')}
         </p>
       ) : view === 'grid' ? (
@@ -304,7 +304,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
       <header className="sticky top-0 z-30 border-b divider panel">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm shadow-indigo-500/30">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white shadow-sm shadow-indigo-500/30">
               <IconCloud className="h-5 w-5" />
             </div>
             <span className="text-base font-semibold tracking-tight text-strong">jrjr-drive</span>
@@ -329,12 +329,12 @@ function ShareThumb({ entry, api }: { entry: Entry; api: ShareApi }) {
         alt=""
         loading="lazy"
         onError={() => setFailed(true)}
-        className="h-full w-full bg-slate-50 object-cover dark:bg-slate-900"
+        className="h-full w-full bg-slate-50 object-cover dark:bg-black/40"
       />
     );
   }
   return (
-    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-white/[0.05] dark:to-white/[0.02]">
       <FileGlyph kind={kind} className="h-16 w-16 rounded-2xl" iconClassName="h-8 w-8" />
     </div>
   );
@@ -374,7 +374,7 @@ function ShareCard({
         {entry.tag === 'file' && allowDownload && (
           <button
             onClick={onDownload}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
           >
             <IconDownload className="h-4 w-4" />
           </button>
@@ -397,7 +397,7 @@ function ShareRow({
 }) {
   const kind: FileKind | 'folder' = entry.tag === 'folder' ? 'folder' : fileKind(entry.name);
   return (
-    <div className="flex items-center gap-3 border-b divider px-4 py-2.5 transition last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+    <div className="flex items-center gap-3 border-b divider px-4 py-2.5 transition last:border-b-0 hover:bg-slate-50 dark:hover:bg-white/[0.05]">
       <FileGlyph kind={kind} className="h-9 w-9" iconClassName="h-[18px] w-[18px]" />
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-medium text-strong">{entry.name}</p>
@@ -408,7 +408,7 @@ function ShareRow({
       {entry.tag === 'file' && allowDownload && (
         <button
           onClick={onDownload}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
         >
           <IconDownload className="h-4 w-4" />
         </button>
@@ -485,7 +485,7 @@ function SharePreviewModal({
           if (hasPrev) onIndex(index - 1);
         }}
         disabled={!hasPrev}
-        className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-slate-800/90 dark:text-slate-200"
+        className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-[#161d31]/95 dark:text-slate-200"
       >
         <IconArrowLeft className="h-5 w-5" />
       </button>
@@ -495,7 +495,7 @@ function SharePreviewModal({
           if (hasNext) onIndex(index + 1);
         }}
         disabled={!hasNext}
-        className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-slate-800/90 dark:text-slate-200"
+        className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-[#161d31]/95 dark:text-slate-200"
       >
         <IconArrowRight className="h-5 w-5" />
       </button>
@@ -522,7 +522,7 @@ function SharePreviewModal({
             <IconClose className="h-[18px] w-[18px]" />
           </button>
         </div>
-        <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-50 p-4 dark:bg-slate-900/60">
+        <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-50 p-4 dark:bg-black/30">
           <FilePreview entry={entry} api={api} />
         </div>
       </div>

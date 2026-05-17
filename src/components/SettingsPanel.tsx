@@ -55,14 +55,14 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-white/[0.06]">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
             value === o.value
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-slate-100'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
           }`}
         >
@@ -166,9 +166,9 @@ export default function SettingsPanel() {
                 : '—'}
             </p>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all"
               style={{ width: `${usedPct}%` }}
             />
           </div>

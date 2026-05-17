@@ -7,14 +7,15 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#4f46e5',
-          dark: '#4338ca',
-          light: '#eef2ff',
+          DEFAULT: '#7c6cff',
+          dark: '#6a55f0',
+          light: '#eef0ff',
         },
       },
       boxShadow: {
         card: '0 1px 2px rgba(15,23,42,0.04), 0 12px 28px -16px rgba(15,23,42,0.22)',
         pop: '0 10px 40px -12px rgba(15,23,42,0.32)',
+        glow: '0 6px 22px -6px rgba(124,108,255,0.7)',
       },
       keyframes: {
         'fade-in': {

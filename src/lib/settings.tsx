@@ -21,7 +21,7 @@ interface Settings {
   sort: SortKey;
 }
 
-const DEFAULTS: Settings = { theme: 'light', lang: 'en', view: 'grid', sort: 'name' };
+const DEFAULTS: Settings = { theme: 'dark', lang: 'en', view: 'grid', sort: 'name' };
 
 /** localStorage key — also read by the inline anti-FOUC script in layout.tsx. */
 export const SETTINGS_STORAGE_KEY = 'jrjr-settings';

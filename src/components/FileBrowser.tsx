@@ -240,7 +240,7 @@ function FilesView() {
         <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-sm">
           <button
             onClick={() => setPath('/')}
-            className={`rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+            className={`rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-white/[0.05] ${
               crumbs.length ? 'text-muted' : 'text-strong'
             }`}
           >
@@ -251,10 +251,10 @@ function FilesView() {
             const last = i === crumbs.length - 1;
             return (
               <span key={target} className="flex min-w-0 items-center">
-                <IconChevron className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
+                <IconChevron className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500" />
                 <button
                   onClick={() => setPath(target)}
-                  className={`truncate rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                  className={`truncate rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-white/[0.05] ${
                     last ? 'text-strong' : 'text-muted'
                   }`}
                 >
@@ -295,9 +295,9 @@ function FilesView() {
             <span className="truncate font-medium">{upload.name}</span>
             <span>{upload.percent}%</span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all"
               style={{ width: `${upload.percent}%` }}
             />
           </div>
@@ -324,7 +324,7 @@ function FilesView() {
           if (!upload) handleUpload(e.dataTransfer.files);
         }}
         className={`relative rounded-2xl transition ${
-          dragging ? 'ring-2 ring-brand ring-offset-2 dark:ring-offset-slate-900' : ''
+          dragging ? 'ring-2 ring-brand ring-offset-2 dark:ring-offset-[#0b0f1a]' : ''
         }`}
       >
         {dragging && (
@@ -413,12 +413,12 @@ function FilesView() {
 function ViewToggle() {
   const { view, set } = useSettings();
   return (
-    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-white/[0.06]">
       <button
         onClick={() => set('view', 'grid')}
         className={`rounded-lg p-1.5 transition ${
           view === 'grid'
-            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-slate-100'
             : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
         }`}
       >
@@ -428,7 +428,7 @@ function ViewToggle() {
         onClick={() => set('view', 'list')}
         className={`rounded-lg p-1.5 transition ${
           view === 'list'
-            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-slate-100'
             : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
         }`}
       >
@@ -444,8 +444,8 @@ function SkeletonGrid({ grid }: { grid: boolean }) {
       <div className="card overflow-hidden">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="flex animate-pulse items-center gap-3 border-b divider px-4 py-3">
-            <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-700/60" />
-            <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-slate-700/60" />
+            <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-white/[0.06]" />
+            <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-white/[0.06]" />
           </div>
         ))}
       </div>
@@ -455,10 +455,10 @@ function SkeletonGrid({ grid }: { grid: boolean }) {
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="card animate-pulse overflow-hidden">
-          <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-700/50" />
+          <div className="aspect-[4/3] bg-slate-100 dark:bg-white/[0.06]" />
           <div className="flex items-center gap-2.5 border-t divider px-3 py-3">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-700/60" />
-            <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-slate-700/60" />
+            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-white/[0.06]" />
+            <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-white/[0.06]" />
           </div>
         </div>
       ))}
@@ -469,8 +469,8 @@ function SkeletonGrid({ grid }: { grid: boolean }) {
 function EmptyState({ onUpload }: { onUpload: () => void }) {
   const t = useT();
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-800/40">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-700/60 dark:text-slate-500">
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.06] dark:text-slate-500">
         <IconUpload className="h-7 w-7" />
       </div>
       <p className="mt-4 text-sm font-medium text-strong">{t('emptyTitle')}</p>
@@ -503,12 +503,12 @@ function CardThumb({ entry, kind }: { entry: Entry; kind: FileKind | 'folder' })
         alt=""
         loading="lazy"
         onError={() => setFailed(true)}
-        className="h-full w-full bg-slate-50 object-cover dark:bg-slate-900"
+        className="h-full w-full bg-slate-50 object-cover dark:bg-black/40"
       />
     );
   }
   return (
-    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-white/[0.05] dark:to-white/[0.02]">
       <FileGlyph kind={kind} className="h-16 w-16 rounded-2xl" iconClassName="h-8 w-8" />
     </div>
   );
@@ -528,8 +528,8 @@ function ActionMenu({ entry, onShare, onRename, onDelete }: EntryActions) {
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100 ${
-          open ? 'bg-slate-100 text-slate-700 dark:bg-slate-700/70' : ''
+        className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100 ${
+          open ? 'bg-slate-100 text-slate-700 dark:bg-white/10' : ''
         }`}
         title={t('actions')}
       >
@@ -569,7 +569,7 @@ function ActionMenu({ entry, onShare, onRename, onDelete }: EntryActions) {
               <IconPencil className="h-4 w-4 text-slate-400" />
               {t('rename')}
             </button>
-            <div className="my-1 h-px bg-slate-100 dark:bg-slate-700" />
+            <div className="my-1 h-px bg-slate-100 dark:bg-white/10" />
             <button
               className="menu-item !text-red-600 dark:!text-red-400"
               onClick={() => {
@@ -620,7 +620,7 @@ function FileRow({ entry, onOpen, ...actions }: EntryActions & { onOpen: () => v
   const t = useT();
   const kind: FileKind | 'folder' = entry.tag === 'folder' ? 'folder' : fileKind(entry.name);
   return (
-    <div className="flex items-center gap-3 border-b divider px-4 py-2.5 transition last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+    <div className="flex items-center gap-3 border-b divider px-4 py-2.5 transition last:border-b-0 hover:bg-slate-50 dark:hover:bg-white/[0.05]">
       <FileGlyph kind={kind} className="h-9 w-9" iconClassName="h-[18px] w-[18px]" />
       <button onClick={onOpen} className="flex min-w-0 flex-1 flex-col text-left">
         <span className="truncate text-sm font-medium text-strong">{entry.name}</span>
@@ -679,7 +679,7 @@ function PreviewModal({
           if (hasPrev) onIndex(index - 1);
         }}
         disabled={!hasPrev}
-        className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-slate-800/90 dark:text-slate-200"
+        className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-[#161d31]/95 dark:text-slate-200"
       >
         <IconArrowLeft className="h-5 w-5" />
       </button>
@@ -689,7 +689,7 @@ function PreviewModal({
           if (hasNext) onIndex(index + 1);
         }}
         disabled={!hasNext}
-        className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-slate-800/90 dark:text-slate-200"
+        className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-[#161d31]/95 dark:text-slate-200"
       >
         <IconArrowRight className="h-5 w-5" />
       </button>
@@ -714,7 +714,7 @@ function PreviewModal({
             <IconClose className="h-[18px] w-[18px]" />
           </button>
         </div>
-        <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-50 p-4 dark:bg-slate-900/60">
+        <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-50 p-4 dark:bg-black/30">
           {kind === 'image' || kind === 'svg' || kind === 'psd' ? (
             <img
               src={prev}
@@ -777,7 +777,7 @@ function ShareFormFields({
                 className={`rounded-xl border p-3 text-left transition ${
                   active
                     ? 'border-brand bg-brand-light dark:bg-indigo-950/50'
-                    : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                    : 'border-slate-200 hover:border-slate-300 dark:border-white/[0.08] dark:hover:border-slate-600'
                 }`}
               >
                 <span
@@ -887,7 +887,7 @@ function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) 
                 readOnly
                 value={url}
                 onFocus={(e) => e.target.select()}
-                className="input min-w-0 flex-1 bg-slate-50 dark:bg-slate-900/60"
+                className="input min-w-0 flex-1 bg-slate-50 dark:bg-black/30"
               />
               <button onClick={copy} className="btn-primary shrink-0">
                 {copied ? <IconCheck className="h-4 w-4" /> : <IconCopy className="h-4 w-4" />}
@@ -980,8 +980,8 @@ function SharesPanel() {
           {error}
         </p>
       ) : !shares.length ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-800/40">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-700/60 dark:text-slate-500">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.06] dark:text-slate-500">
             <IconLink className="h-7 w-7" />
           </div>
           <p className="mt-4 text-sm font-medium text-strong">{t('sharesEmptyTitle')}</p>
@@ -1032,7 +1032,7 @@ function SharesPanel() {
                 <button
                   onClick={() => copy(s.id, s.url)}
                   title={t('copyLink')}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
                 >
                   {copiedId === s.id ? (
                     <IconCheck className="h-4 w-4 text-emerald-600" />
@@ -1043,7 +1043,7 @@ function SharesPanel() {
                 <button
                   onClick={() => setEditing(s)}
                   title={t('edit')}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
                 >
                   <IconPencil className="h-4 w-4" />
                 </button>

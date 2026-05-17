@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description: 'Lightweight self-hosted Dropbox file portal',
 };
 
-/** Applies the saved theme before first paint to avoid a flash of light mode. */
-const themeScript = `(function(){try{var s=JSON.parse(localStorage.getItem('jrjr-settings')||'{}');if(s.theme==='dark')document.documentElement.classList.add('dark');}catch(e){}})();`;
+/** Applies the saved theme before first paint to avoid a flash. Dark default. */
+const themeScript = `(function(){try{var s=JSON.parse(localStorage.getItem('jrjr-settings')||'{}');if(s.theme!=='light')document.documentElement.classList.add('dark');}catch(e){document.documentElement.classList.add('dark');}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -40,7 +40,7 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm animate-pop-in">
       <div className="mb-6 flex flex-col items-center text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white shadow-lg shadow-indigo-500/30">
           <IconCloud className="h-7 w-7" />
         </div>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-strong">jrjr-drive</h1>
