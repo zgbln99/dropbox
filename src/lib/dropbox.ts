@@ -149,16 +149,31 @@ export async function getTemporaryLink(path: string): Promise<string> {
   return res.link;
 }
 
-/** Download raw file bytes through the Dropbox content API. */
-export async function downloadContent(path: string): Promise<Response> {
+/**
+ * Download raw file bytes through the Dropbox content API.
+ *
+ * A timeout is enforced: without one, a stalled connection would leave the
+ * request (and the preview generation that awaits it) hanging indefinitely
+ * with no error ever surfacing.
+ */
+export async function downloadContent(path: string, timeoutMs = 60_000): Promise<Response> {
   const token = await getAccessToken();
-  const res = await fetch('https://content.dropboxapi.com/2/files/download', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Dropbox-API-Arg': apiArg({ path: toApiPath(path) }),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Dropbox-API-Arg': apiArg({ path: toApiPath(path) }),
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new DropboxError(504, `Download timed out after ${timeoutMs}ms`);
+    }
+    throw new DropboxError(502, `Download request failed: ${err instanceof Error ? err.message : err}`);
+  }
   if (!res.ok) {
     throw new DropboxError(res.status, await res.text());
   }

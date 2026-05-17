@@ -17,8 +17,21 @@ export class PreviewError extends Error {
   }
 }
 
+/**
+ * Write a log line synchronously to stdout.
+ *
+ * PSD decoding is CPU-heavy and runs synchronously; if it stalls or the
+ * process is killed (e.g. out of memory) before Node flushes its async,
+ * pipe-buffered stdout, ordinary `console.log` lines are lost — which makes
+ * a hang impossible to diagnose. `fs.writeSync` flushes immediately, so the
+ * last line before a failure always reaches the container logs.
+ */
 function log(message: string): void {
-  console.log(`[preview] ${message}`);
+  try {
+    fs.writeSync(1, `[preview] ${message}\n`);
+  } catch {
+    console.log(`[preview] ${message}`);
+  }
 }
 
 function ensureDir(): void {
@@ -111,7 +124,7 @@ async function loadAgPsd() {
  * raw RGBA pixels, then sharp resizes and encodes the result.
  */
 async function renderPsd(buffer: Buffer): Promise<Buffer> {
-  log(`PSD download complete, ${buffer.length} bytes — parsing`);
+  log(`renderPsd: ${buffer.length} bytes — checking signature`);
 
   // PSD/PSB files start with the "8BPS" magic signature. Anything else means
   // the download returned something unexpected (e.g. an error payload).
@@ -121,17 +134,20 @@ async function renderPsd(buffer: Buffer): Promise<Buffer> {
 
   let psd;
   try {
+    log('loading ag-psd');
     const { readPsd } = await loadAgPsd();
     // ag-psd expects a plain ArrayBuffer; copy into one exactly sized.
     const ab = buffer.buffer.slice(
       buffer.byteOffset,
       buffer.byteOffset + buffer.byteLength,
     ) as ArrayBuffer;
+    log('decoding PSD with readPsd (this runs synchronously)');
     psd = readPsd(ab, {
       skipLayerImageData: true,
       skipThumbnail: true,
       useImageData: true,
     });
+    log('readPsd finished');
   } catch (err) {
     throw new PreviewError(
       422,
@@ -147,15 +163,28 @@ async function renderPsd(buffer: Buffer): Promise<Buffer> {
     );
   }
 
-  log(`PSD parsed: composite ${image.width}x${image.height} — encoding JPEG`);
+  log(`PSD parsed: composite ${image.width}x${image.height}, ${image.data.length} bytes — encoding JPEG`);
+
+  // ag-psd's RGBA composite must be exactly width*height*4 bytes for sharp's
+  // raw decoder; a mismatch would otherwise crash the native layer.
+  const expected = image.width * image.height * 4;
+  if (image.data.length < expected) {
+    throw new PreviewError(
+      422,
+      `PSD composite is incomplete (${image.data.length} of ${expected} bytes)`,
+    );
+  }
+
   const sharp = (await import('sharp')).default;
-  const raw = Buffer.from(image.data.buffer, image.data.byteOffset, image.data.byteLength);
-  return sharp(raw, {
+  const raw = Buffer.from(image.data.buffer, image.data.byteOffset, expected);
+  const jpeg = await sharp(raw, {
     raw: { width: image.width, height: image.height, channels: 4 },
   })
     .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 82 })
     .toBuffer();
+  log(`JPEG encoded: ${jpeg.length} bytes`);
+  return jpeg;
 }
 
 /**
@@ -194,8 +223,12 @@ export async function getPreview(
 
   let body: Buffer;
   if (kind === 'psd') {
+    log(`downloading PSD from Dropbox: ${dbxPath}`);
     const res = await downloadContent(dbxPath);
-    body = await renderPsd(Buffer.from(await res.arrayBuffer()));
+    log(`PSD download response: status=${res.status} content-length=${res.headers.get('content-length') ?? '?'}`);
+    const ab = await res.arrayBuffer();
+    log(`PSD body read into memory: ${ab.byteLength} bytes`);
+    body = await renderPsd(Buffer.from(ab));
   } else {
     // Dropbox renders image thumbnails server-side — cheap on the VPS.
     body = await getThumbnail(dbxPath, 'w1024h768');
