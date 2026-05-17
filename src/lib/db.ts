@@ -32,6 +32,19 @@ export function getDb(): Database.Database {
       window_start INTEGER NOT NULL,
       count        INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS downloads (
+      path     TEXT PRIMARY KEY,
+      name     TEXT NOT NULL,
+      count    INTEGER NOT NULL,
+      last_at  INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS storage_snapshots (
+      ts        INTEGER PRIMARY KEY,
+      used      INTEGER NOT NULL,
+      allocated INTEGER NOT NULL
+    );
   `);
 
   // Migration: add allow_download to databases created before it existed.
@@ -146,6 +159,71 @@ export function deleteShare(id: number): void {
 /** True when a share has an expiry in the past. */
 export function isExpired(share: Share): boolean {
   return share.expires_at != null && share.expires_at < Date.now();
+}
+
+/* ------------------------------------------------------------ statistics */
+
+export interface DownloadStat {
+  path: string;
+  name: string;
+  count: number;
+  lastAt: number;
+}
+
+/** Increment the download counter for a file. */
+export function recordDownload(path: string, name: string): void {
+  try {
+    getDb()
+      .prepare(
+        `INSERT INTO downloads (path, name, count, last_at) VALUES (?, ?, 1, ?)
+         ON CONFLICT(path) DO UPDATE SET count = count + 1, last_at = excluded.last_at, name = excluded.name`,
+      )
+      .run(path, name, Date.now());
+  } catch {
+    /* stats are best-effort — never block a download */
+  }
+}
+
+/** Most-downloaded files, highest first. */
+export function topDownloads(limit = 8): DownloadStat[] {
+  const rows = getDb()
+    .prepare('SELECT path, name, count, last_at FROM downloads ORDER BY count DESC LIMIT ?')
+    .all(limit) as { path: string; name: string; count: number; last_at: number }[];
+  return rows.map((r) => ({ path: r.path, name: r.name, count: r.count, lastAt: r.last_at }));
+}
+
+/** Total downloads counted across all files. */
+export function totalDownloads(): number {
+  const row = getDb().prepare('SELECT COALESCE(SUM(count), 0) AS total FROM downloads').get() as {
+    total: number;
+  };
+  return row.total;
+}
+
+/** Record a storage snapshot, at most once every 12 hours. */
+export function recordStorageSnapshot(used: number, allocated: number): void {
+  try {
+    const db = getDb();
+    const last = db
+      .prepare('SELECT ts FROM storage_snapshots ORDER BY ts DESC LIMIT 1')
+      .get() as { ts: number } | undefined;
+    if (last && Date.now() - last.ts < 12 * 60 * 60 * 1000) return;
+    db.prepare('INSERT INTO storage_snapshots (ts, used, allocated) VALUES (?, ?, ?)').run(
+      Date.now(),
+      used,
+      allocated,
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Storage snapshots, oldest first. */
+export function storageHistory(limit = 60): { ts: number; used: number; allocated: number }[] {
+  const rows = getDb()
+    .prepare('SELECT ts, used, allocated FROM storage_snapshots ORDER BY ts DESC LIMIT ?')
+    .all(limit) as { ts: number; used: number; allocated: number }[];
+  return rows.reverse();
 }
 
 export interface PublicShare {

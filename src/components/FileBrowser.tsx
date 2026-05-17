@@ -28,6 +28,7 @@ import {
   IconAlert,
   IconArrowLeft,
   IconArrowRight,
+  IconChart,
   IconCheck,
   IconChevron,
   IconClose,
@@ -167,6 +168,7 @@ export default function FileBrowser() {
       {view === 'files' && <FilesView />}
       {view === 'shares' && <SharesPanel />}
       {view === 'trash' && <TrashPanel />}
+      {view === 'stats' && <StatsPanel />}
       {view === 'settings' && <SettingsPanel />}
     </AppShell>
   );
@@ -1535,6 +1537,177 @@ function TrashPanel() {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- Statistics */
+
+interface StatsData {
+  storage: { used: number; allocated: number };
+  history: { ts: number; used: number; allocated: number }[];
+  topDownloads: { path: string; name: string; count: number; lastAt: number }[];
+  totalDownloads: number;
+  activeShares: number;
+}
+
+function StatCard({
+  label,
+  value,
+  sub,
+  icon,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 text-muted">
+        <span className="text-slate-400 dark:text-slate-500">{icon}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
+      </div>
+      <p className="mt-2 text-2xl font-semibold text-strong">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-faint">{sub}</p>}
+    </div>
+  );
+}
+
+function StorageChart({ history }: { history: { ts: number; used: number }[] }) {
+  const t = useT();
+  if (history.length < 2) {
+    return <p className="py-10 text-center text-sm text-faint">{t('statsCollecting')}</p>;
+  }
+  const W = 600;
+  const H = 150;
+  const pad = 8;
+  const used = history.map((h) => h.used);
+  const min = Math.min(...used);
+  const max = Math.max(...used);
+  const span = max - min || 1;
+  const pts = history.map((h, i) => {
+    const x = (i / (history.length - 1)) * W;
+    const y = H - pad - ((h.used - min) / span) * (H - 2 * pad);
+    return `${x.toFixed(1)} ${y.toFixed(1)}`;
+  });
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p}`).join(' ');
+  const area = `${line} L${W} ${H} L0 ${H} Z`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-40 w-full" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="storageGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgb(124,108,255)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="rgb(124,108,255)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#storageGrad)" />
+      <path
+        d={line}
+        fill="none"
+        stroke="rgb(34,211,238)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+function StatsPanel() {
+  const t = useT();
+  const [data, setData] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/stats')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) {
+          setData(d);
+          setLoading(false);
+        }
+      })
+      .catch(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pct =
+    data && data.storage.allocated > 0
+      ? Math.round((data.storage.used / data.storage.allocated) * 100)
+      : 0;
+
+  return (
+    <div className="space-y-5">
+      <h1 className="text-xl font-semibold text-strong">{t('statsTitle')}</h1>
+
+      {loading ? (
+        <p className="py-10 text-center text-sm text-faint">{t('loading')}</p>
+      ) : !data ? (
+        <p className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {t('previewUnavailable')}
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard
+              label={t('storageUsed')}
+              value={formatBytes(data.storage.used)}
+              sub={`${pct}% / ${formatBytes(data.storage.allocated)}`}
+              icon={<IconChart className="h-4 w-4" />}
+            />
+            <StatCard
+              label={t('activeLinks')}
+              value={String(data.activeShares)}
+              icon={<IconLink className="h-4 w-4" />}
+            />
+            <StatCard
+              label={t('statTotalDownloads')}
+              value={String(data.totalDownloads)}
+              icon={<IconDownload className="h-4 w-4" />}
+            />
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+              {t('statStorageHistory')}
+            </h2>
+            <StorageChart history={data.history} />
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+              {t('statTopDownloads')}
+            </h2>
+            {data.topDownloads.length === 0 ? (
+              <p className="py-8 text-center text-sm text-faint">{t('statsNoDownloads')}</p>
+            ) : (
+              <div className="divide-y divider">
+                {data.topDownloads.map((d) => (
+                  <div key={d.path} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <FileGlyph
+                      kind={fileKind(d.name)}
+                      className="h-9 w-9"
+                      iconClassName="h-[18px] w-[18px]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-strong">{d.name}</p>
+                      <p className="truncate text-xs text-faint">{d.path}</p>
+                    </div>
+                    <span className="chip">
+                      <IconDownload className="h-3 w-3" />
+                      {d.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

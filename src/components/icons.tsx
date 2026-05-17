@@ -348,6 +348,17 @@ export function IconExpand(p: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconChart(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <path d="M4 20V4M4 20h16" />
+      <rect x="7.5" y="12" width="3" height="5" rx="0.5" />
+      <rect x="12.5" y="8" width="3" height="9" rx="0.5" />
+      <rect x="17.5" y="5" width="3" height="12" rx="0.5" />
+    </Icon>
+  );
+}
+
 export function IconRestore(p: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...p}>

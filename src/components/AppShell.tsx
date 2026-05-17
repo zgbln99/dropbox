@@ -10,15 +10,17 @@ import {
   IconLogout,
   IconMenu,
   IconTrash,
+  IconChart,
 } from './icons';
 import type { TranslationKey } from '@/lib/i18n';
 
-export type AppView = 'files' | 'shares' | 'trash' | 'settings';
+export type AppView = 'files' | 'shares' | 'trash' | 'stats' | 'settings';
 
 const NAV: { id: AppView; Icon: typeof IconFiles; label: TranslationKey }[] = [
   { id: 'files', Icon: IconFiles, label: 'navFiles' },
   { id: 'shares', Icon: IconLink, label: 'navShared' },
   { id: 'trash', Icon: IconTrash, label: 'navTrash' },
+  { id: 'stats', Icon: IconChart, label: 'navStats' },
   { id: 'settings', Icon: IconSettings, label: 'navSettings' },
 ];
 

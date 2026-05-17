@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { errorResponse } from '@/lib/api';
-import { getShareByToken, isExpired, verifyPassword, type Share } from '@/lib/db';
+import {
+  getShareByToken,
+  isExpired,
+  verifyPassword,
+  recordDownload,
+  type Share,
+} from '@/lib/db';
 import { listFolder, getTemporaryLink } from '@/lib/dropbox';
 import { getPreview } from '@/lib/preview';
 import { isWithin, isSafePath } from '@/lib/utils';
@@ -104,6 +110,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
           { status: 403 },
         );
       }
+      recordDownload(path, path.slice(path.lastIndexOf('/') + 1));
       return NextResponse.redirect(await getTemporaryLink(path), 302);
     }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { guard, errorResponse } from '@/lib/api';
 import { getTemporaryLink } from '@/lib/dropbox';
+import { recordDownload } from '@/lib/db';
 import { isSafePath } from '@/lib/utils';
 
 export const runtime = 'nodejs';
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
     if (!isSafePath(path) || path === '/' || path === '') {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+    recordDownload(path, path.slice(path.lastIndexOf('/') + 1));
     const link = await getTemporaryLink(path);
     return NextResponse.redirect(link, 302);
   } catch (err) {
