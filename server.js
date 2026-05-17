@@ -41,6 +41,6 @@ app.prepare().then(() => {
   });
 
   server.listen(port, hostname, () => {
-    console.log(`jrjr-drive ready on http://${hostname}:${port} (dev=${dev})`);
+    console.log(`ZGBLN DRIVE ready on http://${hostname}:${port} (dev=${dev})`);
   });
 });

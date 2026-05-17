@@ -43,7 +43,7 @@ export default function LoginForm() {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white shadow-lg shadow-indigo-500/30">
           <IconCloud className="h-7 w-7" />
         </div>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-strong">jrjr-drive</h1>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-strong">ZGBLN DRIVE</h1>
         <p className="mt-1 text-sm text-muted">{t('loginSubtitle')}</p>
       </div>
 

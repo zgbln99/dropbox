@@ -4,7 +4,7 @@ import { SettingsProvider } from '@/lib/settings';
 import { ToastProvider } from '@/lib/toast';
 
 export const metadata: Metadata = {
-  title: 'jrjr-drive',
+  title: 'ZGBLN DRIVE',
   description: 'Lightweight self-hosted Dropbox file portal',
 };
 

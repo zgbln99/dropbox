@@ -196,7 +196,7 @@ async function handleSimple(res, upstream, okStatus) {
 async function handleWebDav(req, res, port) {
   if (!checkAuth(req)) {
     return send(res, 401, 'Authentication required', {
-      'WWW-Authenticate': 'Basic realm="jrjr-drive"',
+      'WWW-Authenticate': 'Basic realm="ZGBLN DRIVE"',
     });
   }
 

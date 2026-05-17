@@ -49,7 +49,7 @@ export default function AppShell({
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white shadow-sm shadow-indigo-500/30">
           <IconCloud className="h-5 w-5" />
         </div>
-        <span className="text-base font-semibold tracking-tight text-strong">jrjr-drive</span>
+        <span className="text-base font-semibold tracking-tight text-strong">ZGBLN DRIVE</span>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-2">

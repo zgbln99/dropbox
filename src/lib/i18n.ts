@@ -8,7 +8,7 @@ export const LANGUAGES: { value: Lang; label: string }[] = [
 ];
 
 const en = {
-  appName: 'jrjr-drive',
+  appName: 'ZGBLN DRIVE',
   signIn: 'Sign in',
   signingIn: 'Signing in…',
   signOut: 'Sign out',
@@ -157,7 +157,7 @@ const en = {
 type Key = keyof typeof en;
 
 const pl: Record<Key, string> = {
-  appName: 'jrjr-drive',
+  appName: 'ZGBLN DRIVE',
   signIn: 'Zaloguj się',
   signingIn: 'Logowanie…',
   signOut: 'Wyloguj',
