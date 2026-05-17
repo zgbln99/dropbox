@@ -1,27 +1,32 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fileKind, formatBytes, formatDate, joinPath, type FileKind } from '@/lib/utils';
+import { useSettings, type SortKey } from '@/lib/settings';
+import AppShell, { type AppView } from './AppShell';
+import SettingsPanel from './SettingsPanel';
 import {
   FileGlyph,
+  IconArrowLeft,
+  IconArrowRight,
+  IconCheck,
   IconChevron,
   IconClose,
-  IconCloud,
   IconCopy,
-  IconCheck,
   IconDownload,
-  IconFiles,
+  IconEye,
   IconFolderPlus,
+  IconGrid,
   IconLink,
+  IconList,
   IconLock,
-  IconLogout,
   IconMore,
   IconPencil,
   IconShare,
   IconTrash,
   IconUpload,
-} from '@/components/icons';
+} from './icons';
 
 interface Entry {
   tag: 'file' | 'folder';
@@ -40,6 +45,7 @@ interface ShareView {
   name: string;
   isFolder: boolean;
   hasPassword: boolean;
+  allowDownload: boolean;
   expiresAt: number | null;
   createdAt: number;
 }
@@ -51,11 +57,6 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-/**
- * Upload a single file via XHR so upload progress events are available.
- * The server transparently switches to a chunked upload session for files
- * larger than 150 MB.
- */
 function xhrUpload(
   dest: string,
   file: File,
@@ -85,14 +86,47 @@ function xhrUpload(
   });
 }
 
+function sortEntries(entries: Entry[], sort: SortKey): Entry[] {
+  return [...entries].sort((a, b) => {
+    if (a.tag !== b.tag) return a.tag === 'folder' ? -1 : 1;
+    if (sort === 'size') return b.size - a.size;
+    if (sort === 'date') {
+      return (
+        new Date(b.modified || 0).getTime() - new Date(a.modified || 0).getTime()
+      );
+    }
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
+
 export default function FileBrowser() {
   const router = useRouter();
+  const [view, setView] = useState<AppView>('files');
+
+  const logout = useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  }, [router]);
+
+  return (
+    <AppShell view={view} onNavigate={setView} onSignOut={logout}>
+      {view === 'files' && <FilesView />}
+      {view === 'shares' && <SharesPanel />}
+      {view === 'settings' && <SettingsPanel />}
+    </AppShell>
+  );
+}
+
+/* ------------------------------------------------------------------ Files */
+
+function FilesView() {
+  const { view, sort, t } = useSettings();
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [view, setView] = useState<'files' | 'shares'>('files');
-  const [preview, setPreview] = useState<Entry | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Entry | null>(null);
   const [dragging, setDragging] = useState(false);
   const [upload, setUpload] = useState<{
@@ -122,14 +156,8 @@ export default function FileBrowser() {
   }, []);
 
   useEffect(() => {
-    if (view === 'files') loadFolder(path);
-  }, [path, view, loadFolder]);
-
-  async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/login');
-    router.refresh();
-  }
+    loadFolder(path);
+  }, [path, loadFolder]);
 
   const handleUpload = useCallback(
     async (files: FileList | File[] | null) => {
@@ -157,7 +185,7 @@ export default function FileBrowser() {
   );
 
   async function newFolder() {
-    const name = window.prompt('New folder name:');
+    const name = window.prompt(t('newFolderPrompt'));
     if (!name) return;
     try {
       await jsonFetch('/api/files/mkdir', {
@@ -172,7 +200,7 @@ export default function FileBrowser() {
   }
 
   async function rename(entry: Entry) {
-    const name = window.prompt('Rename to:', entry.name);
+    const name = window.prompt(t('renamePrompt'), entry.name);
     if (!name || name === entry.name) return;
     try {
       await jsonFetch('/api/files/move', {
@@ -187,7 +215,7 @@ export default function FileBrowser() {
   }
 
   async function remove(entry: Entry) {
-    if (!window.confirm(`Delete "${entry.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(t('deleteConfirm', { name: entry.name }))) return;
     try {
       await jsonFetch('/api/files/delete', {
         method: 'POST',
@@ -201,208 +229,180 @@ export default function FileBrowser() {
   }
 
   const crumbs = path === '/' ? [] : path.split('/').filter(Boolean);
-  const folders = entries.filter((e) => e.tag === 'folder');
-  const files = entries.filter((e) => e.tag === 'file');
+  const sorted = useMemo(() => sortEntries(entries, sort), [entries, sort]);
+  const folders = sorted.filter((e) => e.tag === 'folder');
+  const files = sorted.filter((e) => e.tag === 'file');
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm shadow-indigo-500/30">
-              <IconCloud className="h-5 w-5" />
-            </div>
-            <span className="text-base font-semibold tracking-tight text-slate-900">jrjr-drive</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-xl bg-slate-100 p-1">
-              <button
-                onClick={() => setView('files')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  view === 'files'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <IconFiles className="h-4 w-4" />
-                <span className="hidden sm:inline">Files</span>
-              </button>
-              <button
-                onClick={() => setView('shares')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  view === 'shares'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <IconLink className="h-4 w-4" />
-                <span className="hidden sm:inline">Share links</span>
-              </button>
-            </div>
-            <button
-              onClick={logout}
-              title="Sign out"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-            >
-              <IconLogout className="h-[18px] w-[18px]" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-        {view === 'shares' ? (
-          <SharesPanel />
-        ) : (
-          <>
-            <div className="mb-5 flex flex-wrap items-center gap-3">
-              <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-sm">
+    <div>
+      {/* Toolbar */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-sm">
+          <button
+            onClick={() => setPath('/')}
+            className={`rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+              crumbs.length ? 'text-muted' : 'text-strong'
+            }`}
+          >
+            {t('home')}
+          </button>
+          {crumbs.map((c, i) => {
+            const target = `/${crumbs.slice(0, i + 1).join('/')}`;
+            const last = i === crumbs.length - 1;
+            return (
+              <span key={target} className="flex min-w-0 items-center">
+                <IconChevron className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
                 <button
-                  onClick={() => setPath('/')}
-                  className={`rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 ${
-                    crumbs.length ? 'text-slate-500' : 'text-slate-900'
+                  onClick={() => setPath(target)}
+                  className={`truncate rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                    last ? 'text-strong' : 'text-muted'
                   }`}
                 >
-                  Home
+                  {c}
                 </button>
-                {crumbs.map((c, i) => {
-                  const target = `/${crumbs.slice(0, i + 1).join('/')}`;
-                  const last = i === crumbs.length - 1;
-                  return (
-                    <span key={target} className="flex min-w-0 items-center">
-                      <IconChevron className="h-4 w-4 shrink-0 text-slate-300" />
-                      <button
-                        onClick={() => setPath(target)}
-                        className={`truncate rounded-lg px-2 py-1 font-medium transition hover:bg-slate-100 ${
-                          last ? 'text-slate-900' : 'text-slate-500'
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    </span>
-                  );
-                })}
-              </nav>
+              </span>
+            );
+          })}
+        </nav>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={newFolder}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                  <IconFolderPlus className="h-4 w-4" />
-                  <span className="hidden sm:inline">New folder</span>
-                </button>
-                <button
-                  onClick={() => fileInput.current?.click()}
-                  disabled={!!upload}
-                  className="flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/30 transition hover:bg-brand-dark disabled:opacity-60"
-                >
-                  <IconUpload className="h-4 w-4" />
-                  {upload ? `${upload.index}/${upload.total} · ${upload.percent}%` : 'Upload'}
-                </button>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(e) => handleUpload(e.target.files)}
-                />
-              </div>
-            </div>
+        <div className="flex items-center gap-2">
+          <ViewToggle />
+          <button onClick={newFolder} className="btn-secondary">
+            <IconFolderPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">{t('newFolder')}</span>
+          </button>
+          <button
+            onClick={() => fileInput.current?.click()}
+            disabled={!!upload}
+            className="btn-primary"
+          >
+            <IconUpload className="h-4 w-4" />
+            {upload ? `${upload.index}/${upload.total} · ${upload.percent}%` : t('upload')}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => handleUpload(e.target.files)}
+          />
+        </div>
+      </div>
 
-            {upload && (
-              <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="mb-1.5 flex justify-between text-xs text-slate-500">
-                  <span className="truncate font-medium text-slate-600">{upload.name}</span>
-                  <span>{upload.percent}%</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
-                    style={{ width: `${upload.percent}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <p className="mb-4 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
-                {error}
-              </p>
-            )}
-
+      {upload && (
+        <div className="mb-4 card p-3">
+          <div className="mb-1.5 flex justify-between text-xs text-muted">
+            <span className="truncate font-medium">{upload.name}</span>
+            <span>{upload.percent}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
             <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (!upload) setDragging(true);
-              }}
-              onDragLeave={(e) => {
-                if (e.currentTarget === e.target) setDragging(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                if (!upload) handleUpload(e.dataTransfer.files);
-              }}
-              className={`relative rounded-2xl transition ${
-                dragging ? 'ring-2 ring-brand ring-offset-2' : ''
-              }`}
-            >
-              {dragging && (
-                <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-brand bg-brand-light/80 backdrop-blur-sm">
-                  <IconUpload className="h-8 w-8 text-brand" />
-                  <p className="mt-2 text-sm font-semibold text-brand-dark">Drop files to upload</p>
-                </div>
-              )}
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+              style={{ width: `${upload.percent}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-              {loading ? (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="animate-pulse overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
-                    >
-                      <div className="aspect-[4/3] bg-slate-100" />
-                      <div className="flex items-center gap-2.5 border-t border-slate-100 px-3 py-3">
-                        <div className="h-8 w-8 rounded-lg bg-slate-100" />
-                        <div className="h-3 flex-1 rounded bg-slate-100" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : entries.length === 0 ? (
-                <EmptyState onUpload={() => fileInput.current?.click()} />
-              ) : (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                  {folders.map((entry) => (
-                    <FileCard
-                      key={entry.path}
-                      entry={entry}
-                      onOpen={() => setPath(entry.path)}
-                      onShare={() => setShareTarget(entry)}
-                      onRename={() => rename(entry)}
-                      onDelete={() => remove(entry)}
-                    />
-                  ))}
-                  {files.map((entry) => (
-                    <FileCard
-                      key={entry.path}
-                      entry={entry}
-                      onOpen={() => setPreview(entry)}
-                      onShare={() => setShareTarget(entry)}
-                      onRename={() => rename(entry)}
-                      onDelete={() => remove(entry)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
+      {error && (
+        <p className="mb-4 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </p>
+      )}
+
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!upload) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (!upload) handleUpload(e.dataTransfer.files);
+        }}
+        className={`relative rounded-2xl transition ${
+          dragging ? 'ring-2 ring-brand ring-offset-2 dark:ring-offset-slate-900' : ''
+        }`}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-brand bg-brand-light/80 backdrop-blur-sm dark:bg-indigo-950/70">
+            <IconUpload className="h-8 w-8 text-brand" />
+            <p className="mt-2 text-sm font-semibold text-brand-dark dark:text-indigo-300">
+              {t('dropToUpload')}
+            </p>
+          </div>
         )}
-      </main>
 
-      {preview && <PreviewModal entry={preview} onClose={() => setPreview(null)} />}
+        {loading ? (
+          <SkeletonGrid grid={view === 'grid'} />
+        ) : entries.length === 0 ? (
+          <EmptyState onUpload={() => fileInput.current?.click()} />
+        ) : view === 'grid' ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {folders.map((entry) => (
+              <FileCard
+                key={entry.path}
+                entry={entry}
+                onOpen={() => setPath(entry.path)}
+                onShare={() => setShareTarget(entry)}
+                onRename={() => rename(entry)}
+                onDelete={() => remove(entry)}
+              />
+            ))}
+            {files.map((entry, i) => (
+              <FileCard
+                key={entry.path}
+                entry={entry}
+                onOpen={() => setPreviewIndex(i)}
+                onShare={() => setShareTarget(entry)}
+                onRename={() => rename(entry)}
+                onDelete={() => remove(entry)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div className="hidden items-center gap-3 border-b divider px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-faint sm:flex">
+              <span className="flex-1">{t('sortName')}</span>
+              <span className="w-24">{t('sortSize')}</span>
+              <span className="w-36">{t('sortDate')}</span>
+              <span className="w-8" />
+            </div>
+            {folders.map((entry) => (
+              <FileRow
+                key={entry.path}
+                entry={entry}
+                onOpen={() => setPath(entry.path)}
+                onShare={() => setShareTarget(entry)}
+                onRename={() => rename(entry)}
+                onDelete={() => remove(entry)}
+              />
+            ))}
+            {files.map((entry, i) => (
+              <FileRow
+                key={entry.path}
+                entry={entry}
+                onOpen={() => setPreviewIndex(i)}
+                onShare={() => setShareTarget(entry)}
+                onRename={() => rename(entry)}
+                onDelete={() => remove(entry)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {previewIndex !== null && files[previewIndex] && (
+        <PreviewModal
+          files={files}
+          index={previewIndex}
+          onIndex={setPreviewIndex}
+          onClose={() => setPreviewIndex(null)}
+        />
+      )}
       {shareTarget && (
         <ShareDialog entry={shareTarget} onClose={() => setShareTarget(null)} />
       )}
@@ -410,24 +410,84 @@ export default function FileBrowser() {
   );
 }
 
-function EmptyState({ onUpload }: { onUpload: () => void }) {
+function ViewToggle() {
+  const { view, set } = useSettings();
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-        <IconFiles className="h-7 w-7" />
-      </div>
-      <p className="mt-4 text-sm font-medium text-slate-700">This folder is empty</p>
-      <p className="mt-1 text-sm text-slate-400">Drag files here or use the upload button.</p>
+    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
       <button
-        onClick={onUpload}
-        className="mt-4 flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/30 transition hover:bg-brand-dark"
+        onClick={() => set('view', 'grid')}
+        className={`rounded-lg p-1.5 transition ${
+          view === 'grid'
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+            : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+        }`}
       >
-        <IconUpload className="h-4 w-4" />
-        Upload files
+        <IconGrid className="h-[18px] w-[18px]" />
+      </button>
+      <button
+        onClick={() => set('view', 'list')}
+        className={`rounded-lg p-1.5 transition ${
+          view === 'list'
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+            : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+        }`}
+      >
+        <IconList className="h-[18px] w-[18px]" />
       </button>
     </div>
   );
 }
+
+function SkeletonGrid({ grid }: { grid: boolean }) {
+  if (!grid) {
+    return (
+      <div className="card overflow-hidden">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="flex animate-pulse items-center gap-3 border-b divider px-4 py-3">
+            <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-700/60" />
+            <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-slate-700/60" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="card animate-pulse overflow-hidden">
+          <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-700/50" />
+          <div className="flex items-center gap-2.5 border-t divider px-3 py-3">
+            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-700/60" />
+            <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-slate-700/60" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ onUpload }: { onUpload: () => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-800/40">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-700/60 dark:text-slate-500">
+        <IconUpload className="h-7 w-7" />
+      </div>
+      <p className="mt-4 text-sm font-medium text-strong">{t('emptyTitle')}</p>
+      <p className="mt-1 text-sm text-faint">{t('emptyHint')}</p>
+      <button onClick={onUpload} className="btn-primary mt-4">
+        <IconUpload className="h-4 w-4" />
+        {t('uploadFiles')}
+      </button>
+    </div>
+  );
+}
+
+function useT() {
+  return useSettings().t;
+}
+
+/* ------------------------------------------------------------- File tiles */
 
 function CardThumb({ entry, kind }: { entry: Entry; kind: FileKind | 'folder' }) {
   const [failed, setFailed] = useState(false);
@@ -443,109 +503,83 @@ function CardThumb({ entry, kind }: { entry: Entry; kind: FileKind | 'folder' })
         alt=""
         loading="lazy"
         onError={() => setFailed(true)}
-        className="h-full w-full bg-slate-50 object-cover"
+        className="h-full w-full bg-slate-50 object-cover dark:bg-slate-900"
       />
     );
   }
-
   return (
-    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
       <FileGlyph kind={kind} className="h-16 w-16 rounded-2xl" iconClassName="h-8 w-8" />
     </div>
   );
 }
 
-function FileCard({
-  entry,
-  onOpen,
-  onShare,
-  onRename,
-  onDelete,
-}: {
+interface EntryActions {
   entry: Entry;
-  onOpen: () => void;
   onShare: () => void;
   onRename: () => void;
   onDelete: () => void;
-}) {
-  const [menu, setMenu] = useState(false);
-  const kind: FileKind | 'folder' = entry.tag === 'folder' ? 'folder' : fileKind(entry.name);
-  const meta =
-    entry.tag === 'folder'
-      ? 'Folder'
-      : `${formatBytes(entry.size)}${entry.modified ? ` · ${formatDate(entry.modified)}` : ''}`;
+}
 
+function ActionMenu({ entry, onShare, onRename, onDelete }: EntryActions) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
   return (
-    <div
-      className={`group relative flex flex-col rounded-2xl border border-slate-200/70 bg-white shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-card ${
-        menu ? 'z-20' : ''
-      }`}
-    >
+    <div className="relative">
       <button
-        onClick={onOpen}
-        className="block aspect-[4/3] w-full overflow-hidden rounded-t-2xl"
-        title={entry.name}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100 ${
+          open ? 'bg-slate-100 text-slate-700 dark:bg-slate-700/70' : ''
+        }`}
+        title={t('actions')}
       >
-        <CardThumb entry={entry} kind={kind} />
+        <IconMore className="h-[18px] w-[18px]" />
       </button>
-
-      <div className="flex items-center gap-2.5 rounded-b-2xl border-t border-slate-100 px-3 py-2.5">
-        <FileGlyph kind={kind} className="h-9 w-9" iconClassName="h-[18px] w-[18px]" />
-        <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-          <p className="truncate text-sm font-medium text-slate-800">{entry.name}</p>
-          <p className="truncate text-xs text-slate-400">{meta}</p>
-        </button>
-        <button
-          onClick={() => setMenu((m) => !m)}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 ${
-            menu ? 'bg-slate-100 text-slate-700' : ''
-          }`}
-          title="Actions"
-        >
-          <IconMore className="h-[18px] w-[18px]" />
-        </button>
-      </div>
-
-      {menu && (
+      {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
-          <div className="absolute right-2 top-full z-30 mt-1.5 w-44 animate-pop-in overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-pop">
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="menu absolute right-0 top-full z-30 mt-1.5 w-44 animate-pop-in">
             {entry.tag === 'file' && (
               <a
                 href={`/api/files/download?path=${encodeURIComponent(entry.path)}`}
-                onClick={() => setMenu(false)}
-                className="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                onClick={() => setOpen(false)}
+                className="menu-item"
               >
                 <IconDownload className="h-4 w-4 text-slate-400" />
-                Download
+                {t('download')}
               </a>
             )}
-            <MenuItem
-              icon={<IconShare className="h-4 w-4 text-slate-400" />}
-              label="Share"
+            <button
+              className="menu-item"
               onClick={() => {
-                setMenu(false);
+                setOpen(false);
                 onShare();
               }}
-            />
-            <MenuItem
-              icon={<IconPencil className="h-4 w-4 text-slate-400" />}
-              label="Rename"
+            >
+              <IconShare className="h-4 w-4 text-slate-400" />
+              {t('share')}
+            </button>
+            <button
+              className="menu-item"
               onClick={() => {
-                setMenu(false);
+                setOpen(false);
                 onRename();
               }}
-            />
-            <div className="my-1 h-px bg-slate-100" />
-            <MenuItem
-              icon={<IconTrash className="h-4 w-4 text-red-500" />}
-              label="Delete"
-              danger
+            >
+              <IconPencil className="h-4 w-4 text-slate-400" />
+              {t('rename')}
+            </button>
+            <div className="my-1 h-px bg-slate-100 dark:bg-slate-700" />
+            <button
+              className="menu-item !text-red-600 dark:!text-red-400"
               onClick={() => {
-                setMenu(false);
+                setOpen(false);
                 onDelete();
               }}
-            />
+            >
+              <IconTrash className="h-4 w-4 text-red-500" />
+              {t('delete')}
+            </button>
           </div>
         </>
       )}
@@ -553,72 +587,134 @@ function FileCard({
   );
 }
 
-function MenuItem({
-  icon,
-  label,
-  onClick,
-  danger,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
+function FileCard({ entry, onOpen, ...actions }: EntryActions & { onOpen: () => void }) {
+  const t = useT();
+  const kind: FileKind | 'folder' = entry.tag === 'folder' ? 'folder' : fileKind(entry.name);
+  const meta =
+    entry.tag === 'folder'
+      ? t('folder')
+      : `${formatBytes(entry.size)}${entry.modified ? ` · ${formatDate(entry.modified)}` : ''}`;
+
   return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-slate-50 ${
-        danger ? 'text-red-600' : 'text-slate-700'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="group card relative flex flex-col transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-card dark:hover:border-slate-600">
+      <button
+        onClick={onOpen}
+        className="block aspect-[4/3] w-full overflow-hidden rounded-t-2xl"
+        title={entry.name}
+      >
+        <CardThumb entry={entry} kind={kind} />
+      </button>
+      <div className="flex items-center gap-2.5 rounded-b-2xl border-t divider px-3 py-2.5">
+        <FileGlyph kind={kind} className="h-9 w-9" iconClassName="h-[18px] w-[18px]" />
+        <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <p className="truncate text-sm font-medium text-strong">{entry.name}</p>
+          <p className="truncate text-xs text-faint">{meta}</p>
+        </button>
+        <ActionMenu entry={entry} {...actions} />
+      </div>
+    </div>
   );
 }
 
-function PreviewModal({ entry, onClose }: { entry: Entry; onClose: () => void }) {
+function FileRow({ entry, onOpen, ...actions }: EntryActions & { onOpen: () => void }) {
+  const t = useT();
+  const kind: FileKind | 'folder' = entry.tag === 'folder' ? 'folder' : fileKind(entry.name);
+  return (
+    <div className="flex items-center gap-3 border-b divider px-4 py-2.5 transition last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+      <FileGlyph kind={kind} className="h-9 w-9" iconClassName="h-[18px] w-[18px]" />
+      <button onClick={onOpen} className="flex min-w-0 flex-1 flex-col text-left">
+        <span className="truncate text-sm font-medium text-strong">{entry.name}</span>
+        <span className="text-xs text-faint sm:hidden">
+          {entry.tag === 'folder' ? t('folder') : formatBytes(entry.size)}
+        </span>
+      </button>
+      <span className="hidden w-24 text-sm text-muted sm:block">
+        {entry.tag === 'folder' ? '—' : formatBytes(entry.size)}
+      </span>
+      <span className="hidden w-36 text-sm text-muted sm:block">{formatDate(entry.modified)}</span>
+      <ActionMenu entry={entry} {...actions} />
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------- Preview modal */
+
+function PreviewModal({
+  files,
+  index,
+  onIndex,
+  onClose,
+}: {
+  files: Entry[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const entry = files[index];
+  const hasPrev = index > 0;
+  const hasNext = index < files.length - 1;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft' && index > 0) onIndex(index - 1);
+      if (e.key === 'ArrowRight' && index < files.length - 1) onIndex(index + 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [index, files.length, onIndex, onClose]);
+
   const kind = fileKind(entry.name);
   const raw = `/api/files/download?path=${encodeURIComponent(entry.path)}`;
   const prev = `/api/files/preview?path=${encodeURIComponent(entry.path)}&rev=${encodeURIComponent(
     entry.rev || '',
   )}`;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <div className="modal-backdrop" onClick={onClose}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (hasPrev) onIndex(index - 1);
+        }}
+        disabled={!hasPrev}
+        className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-slate-800/90 dark:text-slate-200"
+      >
+        <IconArrowLeft className="h-5 w-5" />
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (hasNext) onIndex(index + 1);
+        }}
+        disabled={!hasNext}
+        className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-pop transition hover:bg-white disabled:opacity-0 sm:flex dark:bg-slate-800/90 dark:text-slate-200"
+      >
+        <IconArrowRight className="h-5 w-5" />
+      </button>
+
       <div
-        className="flex max-h-[92vh] w-full max-w-4xl animate-pop-in flex-col overflow-hidden rounded-2xl bg-white shadow-pop"
+        className="modal-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center gap-3 border-b divider px-4 py-3">
           <FileGlyph kind={kind} className="h-9 w-9" iconClassName="h-[18px] w-[18px]" />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
-            {entry.name}
-          </span>
-          <a
-            href={raw}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-strong">{entry.name}</p>
+            <p className="text-xs text-faint">
+              {index + 1} / {files.length}
+            </p>
+          </div>
+          <a href={raw} className="btn-secondary">
             <IconDownload className="h-4 w-4" />
-            <span className="hidden sm:inline">Download</span>
+            <span className="hidden sm:inline">{t('download')}</span>
           </a>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-          >
+          <button onClick={onClose} className="btn-icon">
             <IconClose className="h-[18px] w-[18px]" />
           </button>
         </div>
-        <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-50 p-4">
+        <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-50 p-4 dark:bg-slate-900/60">
           {kind === 'image' || kind === 'svg' || kind === 'psd' ? (
             <img
               src={prev}
@@ -632,12 +728,9 @@ function PreviewModal({ entry, onClose }: { entry: Entry; onClose: () => void })
           ) : (
             <div className="flex flex-col items-center py-12 text-center">
               <FileGlyph kind={kind} className="h-16 w-16 rounded-2xl" iconClassName="h-8 w-8" />
-              <p className="mt-3 text-sm text-slate-500">No preview for this file type.</p>
-              <a
-                href={raw}
-                className="mt-4 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/30 transition hover:bg-brand-dark"
-              >
-                Download file
+              <p className="mt-3 text-sm text-muted">{t('noPreview')}</p>
+              <a href={raw} className="btn-primary mt-4">
+                {t('downloadFile')}
               </a>
             </div>
           )}
@@ -647,9 +740,97 @@ function PreviewModal({ entry, onClose }: { entry: Entry; onClose: () => void })
   );
 }
 
+/* ------------------------------------------------------- Share form fields */
+
+type Permission = 'view' | 'download';
+
+function ShareFormFields({
+  password,
+  setPassword,
+  expiresAt,
+  setExpiresAt,
+  permission,
+  setPermission,
+  passwordPlaceholder,
+}: {
+  password: string;
+  setPassword: (v: string) => void;
+  expiresAt: string;
+  setExpiresAt: (v: string) => void;
+  permission: Permission;
+  setPermission: (v: Permission) => void;
+  passwordPlaceholder: string;
+}) {
+  const t = useT();
+  return (
+    <>
+      <div className="mt-5">
+        <p className="mb-1.5 text-sm font-medium text-strong">{t('permissions')}</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(['view', 'download'] as Permission[]).map((p) => {
+            const active = permission === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPermission(p)}
+                className={`rounded-xl border p-3 text-left transition ${
+                  active
+                    ? 'border-brand bg-brand-light dark:bg-indigo-950/50'
+                    : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                }`}
+              >
+                <span
+                  className={`flex items-center gap-1.5 text-sm font-semibold ${
+                    active ? 'text-brand-dark dark:text-indigo-300' : 'text-strong'
+                  }`}
+                >
+                  {p === 'view' ? (
+                    <IconEye className="h-4 w-4" />
+                  ) : (
+                    <IconDownload className="h-4 w-4" />
+                  )}
+                  {p === 'view' ? t('permViewOnly') : t('permDownload')}
+                </span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  {p === 'view' ? t('permViewOnlyHint') : t('permDownloadHint')}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <label className="mt-4 block text-sm font-medium text-strong">
+        {t('passwordLabel')}
+        <span className="ml-1 font-normal text-faint">({t('optional')})</span>
+        <input
+          type="text"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={passwordPlaceholder}
+          className="input mt-1.5"
+        />
+      </label>
+      <label className="mt-4 block text-sm font-medium text-strong">
+        {t('expiresLabel')}
+        <span className="ml-1 font-normal text-faint">({t('optional')})</span>
+        <input
+          type="date"
+          value={expiresAt}
+          onChange={(e) => setExpiresAt(e.target.value)}
+          className="input mt-1.5"
+        />
+      </label>
+    </>
+  );
+}
+
 function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) {
+  const t = useT();
   const [password, setPassword] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  const [permission, setPermission] = useState<Permission>('download');
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -666,6 +847,7 @@ function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) 
           path: entry.path,
           password: password || undefined,
           expiresAt: expiresAt || undefined,
+          allowDownload: permission === 'download',
         }),
       });
       setUrl(data.share.url);
@@ -683,90 +865,63 @@ function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) 
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md animate-pop-in rounded-2xl bg-white p-6 shadow-pop"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand dark:bg-indigo-950/60">
             <IconShare className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-slate-900">Share file</h2>
-            <p className="truncate text-sm text-slate-400">{entry.name}</p>
+            <h2 className="text-base font-semibold text-strong">
+              {entry.tag === 'folder' ? t('shareFolder') : t('shareFile')}
+            </h2>
+            <p className="truncate text-sm text-faint">{entry.name}</p>
           </div>
         </div>
 
         {url ? (
           <div className="mt-5">
-            <p className="text-sm font-medium text-slate-700">Public link created</p>
+            <p className="text-sm font-medium text-strong">{t('linkCreated')}</p>
             <div className="mt-1.5 flex gap-2">
               <input
                 readOnly
                 value={url}
                 onFocus={(e) => e.target.select()}
-                className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                className="input min-w-0 flex-1 bg-slate-50 dark:bg-slate-900/60"
               />
-              <button
-                onClick={copy}
-                className="flex shrink-0 items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
-              >
+              <button onClick={copy} className="btn-primary shrink-0">
                 {copied ? <IconCheck className="h-4 w-4" /> : <IconCopy className="h-4 w-4" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('copied') : t('copy')}
               </button>
             </div>
             <div className="mt-5 flex justify-end">
-              <button
-                onClick={onClose}
-                className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-              >
-                Done
+              <button onClick={onClose} className="btn-soft">
+                {t('done')}
               </button>
             </div>
           </div>
         ) : (
           <>
-            <label className="mt-5 block text-sm font-medium text-slate-700">
-              Password
-              <span className="ml-1 font-normal text-slate-400">(optional)</span>
-              <input
-                type="text"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="No password"
-                className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-              />
-            </label>
-            <label className="mt-4 block text-sm font-medium text-slate-700">
-              Expires
-              <span className="ml-1 font-normal text-slate-400">(optional)</span>
-              <input
-                type="date"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-              />
-            </label>
+            <ShareFormFields
+              password={password}
+              setPassword={setPassword}
+              expiresAt={expiresAt}
+              setExpiresAt={setExpiresAt}
+              permission={permission}
+              setPermission={setPermission}
+              passwordPlaceholder={t('noPassword')}
+            />
             {error && (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                {error}
+              </p>
             )}
             <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={onClose}
-                className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-              >
-                Cancel
+              <button onClick={onClose} className="btn-soft">
+                {t('cancel')}
               </button>
-              <button
-                onClick={create}
-                disabled={busy}
-                className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/30 transition hover:bg-brand-dark disabled:opacity-60"
-              >
-                {busy ? 'Creating…' : 'Create link'}
+              <button onClick={create} disabled={busy} className="btn-primary">
+                {busy ? t('creating') : t('createLink')}
               </button>
             </div>
           </>
@@ -776,11 +931,15 @@ function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) 
   );
 }
 
+/* ----------------------------------------------------------- Shares panel */
+
 function SharesPanel() {
+  const t = useT();
   const [shares, setShares] = useState<ShareView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<ShareView | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -799,7 +958,7 @@ function SharesPanel() {
   }, [load]);
 
   async function revoke(id: number) {
-    if (!window.confirm('Revoke this share link?')) return;
+    if (!window.confirm(t('revokeConfirm'))) return;
     await fetch(`/api/shares/${id}`, { method: 'DELETE' });
     await load();
   }
@@ -810,88 +969,188 @@ function SharesPanel() {
     setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 1800);
   }
 
-  if (loading) {
-    return <p className="py-10 text-center text-sm text-slate-400">Loading…</p>;
-  }
-  if (error) {
-    return (
-      <p className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
-        {error}
-      </p>
-    );
-  }
-  if (!shares.length) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-          <IconLink className="h-7 w-7" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-slate-700">No share links yet</p>
-        <p className="mt-1 text-sm text-slate-400">
-          Create one from the Share action on any file.
+  return (
+    <div>
+      <h1 className="mb-5 text-xl font-semibold text-strong">{t('navShared')}</h1>
+
+      {loading ? (
+        <p className="py-10 text-center text-sm text-faint">{t('loading')}</p>
+      ) : error ? (
+        <p className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {error}
         </p>
-      </div>
-    );
+      ) : !shares.length ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-800/40">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-700/60 dark:text-slate-500">
+            <IconLink className="h-7 w-7" />
+          </div>
+          <p className="mt-4 text-sm font-medium text-strong">{t('sharesEmptyTitle')}</p>
+          <p className="mt-1 text-sm text-faint">{t('sharesEmptyHint')}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {shares.map((s) => (
+            <div key={s.id} className="flex flex-wrap items-center gap-3 card p-3.5">
+              <FileGlyph
+                kind={s.isFolder ? 'folder' : fileKind(s.name)}
+                className="h-10 w-10"
+                iconClassName="h-5 w-5"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-strong">{s.name}</p>
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate text-xs text-brand hover:underline dark:text-indigo-400"
+                >
+                  {s.url}
+                </a>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`chip ${
+                    s.hasPassword
+                      ? '!bg-amber-50 !text-amber-700 dark:!bg-amber-950/50 dark:!text-amber-400'
+                      : ''
+                  }`}
+                >
+                  {s.hasPassword && <IconLock className="h-3 w-3" />}
+                  {s.hasPassword ? t('passwordProtected') : t('public')}
+                </span>
+                {!s.allowDownload && (
+                  <span className="chip">
+                    <IconEye className="h-3 w-3" />
+                    {t('viewOnly')}
+                  </span>
+                )}
+                {s.expiresAt && (
+                  <span className="chip hidden sm:inline-flex">
+                    {t('until', { date: formatDate(new Date(s.expiresAt).toISOString()) })}
+                  </span>
+                )}
+                <button
+                  onClick={() => copy(s.id, s.url)}
+                  title={t('copyLink')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100"
+                >
+                  {copiedId === s.id ? (
+                    <IconCheck className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <IconCopy className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setEditing(s)}
+                  title={t('edit')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/70 dark:hover:text-slate-100"
+                >
+                  <IconPencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => revoke(s.id)}
+                  title={t('revoke')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                >
+                  <IconTrash className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <ShareEditModal
+          share={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ShareEditModal({
+  share,
+  onClose,
+  onSaved,
+}: {
+  share: ShareView;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const [password, setPassword] = useState('');
+  const [expiresAt, setExpiresAt] = useState(
+    share.expiresAt ? new Date(share.expiresAt).toISOString().slice(0, 10) : '',
+  );
+  const [permission, setPermission] = useState<Permission>(
+    share.allowDownload ? 'download' : 'view',
+  );
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setError('');
+    try {
+      await jsonFetch(`/api/shares/${share.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // Only send the password when the field was filled in.
+          ...(password ? { password } : {}),
+          expiresAt: expiresAt || null,
+          allowDownload: permission === 'download',
+        }),
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update share');
+      setBusy(false);
+    }
   }
 
   return (
-    <div className="space-y-3">
-      {shares.map((s) => (
-        <div
-          key={s.id}
-          className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-sm"
-        >
-          <FileGlyph
-            kind={s.isFolder ? 'folder' : fileKind(s.name)}
-            className="h-10 w-10"
-            iconClassName="h-5 w-5"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-slate-800">{s.name}</p>
-            <a
-              href={s.url}
-              target="_blank"
-              rel="noreferrer"
-              className="truncate text-xs text-brand hover:underline"
-            >
-              {s.url}
-            </a>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand dark:bg-indigo-950/60">
+            <IconPencil className="h-5 w-5" />
           </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                s.hasPassword ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'
-              }`}
-            >
-              {s.hasPassword && <IconLock className="h-3 w-3" />}
-              {s.hasPassword ? 'Password' : 'Public'}
-            </span>
-            {s.expiresAt && (
-              <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500 sm:inline">
-                Until {formatDate(new Date(s.expiresAt).toISOString())}
-              </span>
-            )}
-            <button
-              onClick={() => copy(s.id, s.url)}
-              title="Copy link"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              {copiedId === s.id ? (
-                <IconCheck className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <IconCopy className="h-4 w-4" />
-              )}
-            </button>
-            <button
-              onClick={() => revoke(s.id)}
-              title="Revoke"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-            >
-              <IconTrash className="h-4 w-4" />
-            </button>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-strong">{t('editShare')}</h2>
+            <p className="truncate text-sm text-faint">{share.name}</p>
           </div>
         </div>
-      ))}
+
+        <ShareFormFields
+          password={password}
+          setPassword={setPassword}
+          expiresAt={expiresAt}
+          setExpiresAt={setExpiresAt}
+          permission={permission}
+          setPermission={setPermission}
+          passwordPlaceholder={share.hasPassword ? '••••••••' : t('noPassword')}
+        />
+        {error && (
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="btn-soft">
+            {t('cancel')}
+          </button>
+          <button onClick={save} disabled={busy} className="btn-primary">
+            {busy ? t('saving') : t('updateLink')}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

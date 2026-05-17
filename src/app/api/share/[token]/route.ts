@@ -77,10 +77,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       name: share.name,
       isFolder: !!share.is_folder,
       hasPassword: !!share.password_hash,
+      allowDownload: !!share.allow_download,
     });
   }
 
   try {
+    // Downloads (and download-link minting) are refused on view-only shares.
+    if ((action === 'download' || action === 'sign') && !share.allow_download) {
+      return NextResponse.json(
+        { error: 'Downloads are disabled for this link' },
+        { status: 403 },
+      );
+    }
+
     // --- signed download: the signature authorises access, not the password.
     if (action === 'download') {
       const path = url.searchParams.get('path') || share.path;

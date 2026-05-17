@@ -5,6 +5,9 @@
 :root {
   color-scheme: light;
 }
+.dark {
+  color-scheme: dark;
+}
 
 html,
 body {
@@ -12,7 +15,7 @@ body {
 }
 
 body {
-  @apply text-slate-700 antialiased;
+  @apply text-slate-700 antialiased dark:text-slate-200;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   background-color: #f4f5fb;
@@ -21,8 +24,13 @@ body {
     radial-gradient(42rem 42rem at -12% 112%, rgba(14, 165, 233, 0.12), transparent 60%);
   background-attachment: fixed;
 }
+.dark body {
+  background-color: #0b1120;
+  background-image:
+    radial-gradient(48rem 48rem at 108% -12%, rgba(99, 102, 241, 0.22), transparent 62%),
+    radial-gradient(42rem 42rem at -12% 112%, rgba(14, 165, 233, 0.14), transparent 60%);
+}
 
-/* Slimmer, less obtrusive scrollbars. */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
@@ -34,4 +42,90 @@ body {
 *::-webkit-scrollbar-thumb {
   background-color: rgba(100, 116, 139, 0.35);
   border-radius: 9999px;
+}
+
+@layer components {
+  /* Surfaces */
+  .card {
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-sm
+      dark:border-slate-700/60 dark:bg-slate-800/70;
+  }
+  .panel {
+    @apply border-slate-200/70 bg-white/80 backdrop-blur
+      dark:border-slate-700/60 dark:bg-slate-900/70;
+  }
+
+  /* Text helpers */
+  .text-strong {
+    @apply text-slate-900 dark:text-slate-100;
+  }
+  .text-muted {
+    @apply text-slate-500 dark:text-slate-400;
+  }
+  .text-faint {
+    @apply text-slate-400 dark:text-slate-500;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm
+      text-slate-800 outline-none transition
+      placeholder:text-slate-400
+      focus:border-brand focus:ring-2 focus:ring-brand/20
+      dark:border-slate-600 dark:bg-slate-900/60 dark:text-slate-100
+      dark:placeholder:text-slate-500;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3.5 py-2
+      text-sm font-semibold text-white shadow-sm shadow-indigo-500/30 transition
+      hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200
+      bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition
+      hover:bg-slate-50
+      dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/70;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2
+      text-sm font-medium text-slate-700 transition hover:bg-slate-200
+      dark:bg-slate-700/70 dark:text-slate-200 dark:hover:bg-slate-700;
+  }
+  .btn-icon {
+    @apply flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition
+      hover:bg-slate-100 hover:text-slate-800
+      dark:text-slate-400 dark:hover:bg-slate-700/70 dark:hover:text-slate-100;
+  }
+
+  /* Dropdown menu */
+  .menu {
+    @apply overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-pop
+      dark:border-slate-700 dark:bg-slate-800;
+  }
+  .menu-item {
+    @apply flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700
+      transition hover:bg-slate-50
+      dark:text-slate-200 dark:hover:bg-slate-700/70;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    @apply fixed inset-0 z-50 flex animate-fade-in items-center justify-center
+      bg-slate-900/70 p-4 backdrop-blur-sm;
+  }
+  .modal-panel {
+    @apply animate-pop-in rounded-2xl bg-white shadow-pop dark:bg-slate-800;
+  }
+
+  /* Pills / chips */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs
+      font-medium text-slate-500 dark:bg-slate-700/70 dark:text-slate-300;
+  }
+
+  .divider {
+    @apply border-slate-100 dark:border-slate-700/60;
+  }
 }

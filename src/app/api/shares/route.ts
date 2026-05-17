@@ -1,31 +1,16 @@
 import { NextResponse } from 'next/server';
 import { guard, errorResponse } from '@/lib/api';
-import { createShare, listShares } from '@/lib/db';
+import { createShare, listShares, shareToPublic } from '@/lib/db';
 import { getMetadata } from '@/lib/dropbox';
-import { config } from '@/lib/config';
 import { isSafePath } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function publicView(s: ReturnType<typeof listShares>[number]) {
-  return {
-    id: s.id,
-    token: s.token,
-    url: `${config.appUrl}/s/${s.token}`,
-    path: s.path,
-    name: s.name,
-    isFolder: !!s.is_folder,
-    hasPassword: !!s.password_hash,
-    expiresAt: s.expires_at,
-    createdAt: s.created_at,
-  };
-}
-
 export async function GET(req: Request) {
   const denied = guard(req);
   if (denied) return denied;
-  return NextResponse.json({ shares: listShares().map(publicView) });
+  return NextResponse.json({ shares: listShares().map(shareToPublic) });
 }
 
 export async function POST(req: Request) {
@@ -55,8 +40,9 @@ export async function POST(req: Request) {
       isFolder: meta.tag === 'folder',
       password: body.password ? String(body.password) : null,
       expiresAt,
+      allowDownload: body.allowDownload !== false,
     });
-    return NextResponse.json({ share: publicView(share) });
+    return NextResponse.json({ share: shareToPublic(share) });
   } catch (err) {
     return errorResponse(err);
   }

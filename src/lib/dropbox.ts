@@ -143,6 +143,15 @@ export async function getMetadata(path: string): Promise<DbxEntry> {
   return mapEntry(e);
 }
 
+/** Total and used storage for the linked Dropbox account, in bytes. */
+export async function getSpaceUsage(): Promise<{ used: number; allocated: number }> {
+  const res = await rpc<{ used?: number; allocation?: { allocated?: number } }>(
+    'users/get_space_usage',
+    null,
+  );
+  return { used: res.used ?? 0, allocated: res.allocation?.allocated ?? 0 };
+}
+
 /** Get a short-lived direct download URL (offloads bandwidth from the VPS). */
 export async function getTemporaryLink(path: string): Promise<string> {
   const res = await rpc<{ link: string }>('files/get_temporary_link', { path: toApiPath(path) });

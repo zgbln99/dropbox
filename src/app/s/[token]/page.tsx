@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic';
 function Notice({ title, message }: { title: string; message: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-8 text-center shadow">
-        <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
-        <p className="mt-2 text-sm text-slate-500">{message}</p>
+      <div className="card w-full max-w-md p-8 text-center">
+        <h1 className="text-xl font-semibold text-strong">{title}</h1>
+        <p className="mt-2 text-sm text-muted">{message}</p>
       </div>
     </main>
   );
@@ -45,6 +45,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       name={share.name}
       isFolder={!!share.is_folder}
       hasPassword={!!share.password_hash}
+      allowDownload={!!share.allow_download}
       rootPath={share.path}
     />
   );
