@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fileKind, formatBytes, formatDate, joinPath, type FileKind } from '@/lib/utils';
-import { useSettings, type SortKey } from '@/lib/settings';
+import { useSettings, type SortKey, type TileSize } from '@/lib/settings';
+import type { TranslationKey } from '@/lib/i18n';
 import AppShell, { type AppView } from './AppShell';
 import SettingsPanel from './SettingsPanel';
 import {
@@ -16,6 +17,7 @@ import {
   IconCopy,
   IconDownload,
   IconEye,
+  IconFilter,
   IconFolderPlus,
   IconGrid,
   IconLink,
@@ -23,6 +25,7 @@ import {
   IconLock,
   IconMore,
   IconPencil,
+  IconSearch,
   IconShare,
   IconTrash,
   IconUpload,
@@ -99,6 +102,35 @@ function sortEntries(entries: Entry[], sort: SortKey): Entry[] {
   });
 }
 
+type FilterKind = 'all' | 'images' | 'documents' | 'video' | 'design' | 'other';
+
+const FILTERS: { value: FilterKind; label: string }[] = [
+  { value: 'all', label: 'filterAll' },
+  { value: 'images', label: 'filterImages' },
+  { value: 'documents', label: 'filterDocuments' },
+  { value: 'video', label: 'filterVideo' },
+  { value: 'design', label: 'filterDesign' },
+  { value: 'other', label: 'filterOther' },
+];
+
+function matchesFilter(entry: Entry, filter: FilterKind): boolean {
+  if (filter === 'all') return true;
+  if (entry.tag === 'folder') return false;
+  const k = fileKind(entry.name);
+  if (filter === 'images') return k === 'image' || k === 'svg';
+  if (filter === 'documents') return k === 'pdf';
+  if (filter === 'video') return k === 'video';
+  if (filter === 'design') return k === 'psd';
+  return k === 'other';
+}
+
+/** Responsive grid column counts per tile size. */
+const GRID_COLS: Record<TileSize, string> = {
+  sm: 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6',
+  md: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
+  lg: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+};
+
 export default function FileBrowser() {
   const router = useRouter();
   const [view, setView] = useState<AppView>('files');
@@ -121,11 +153,13 @@ export default function FileBrowser() {
 /* ------------------------------------------------------------------ Files */
 
 function FilesView() {
-  const { view, sort, t } = useSettings();
+  const { view, sort, tileSize, set, t } = useSettings();
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<FilterKind>('all');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Entry | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -229,14 +263,20 @@ function FilesView() {
   }
 
   const crumbs = path === '/' ? [] : path.split('/').filter(Boolean);
-  const sorted = useMemo(() => sortEntries(entries, sort), [entries, sort]);
-  const folders = sorted.filter((e) => e.tag === 'folder');
-  const files = sorted.filter((e) => e.tag === 'file');
+  const query = search.trim().toLowerCase();
+  const visible = useMemo(() => {
+    return sortEntries(entries, sort).filter(
+      (e) =>
+        (!query || e.name.toLowerCase().includes(query)) && matchesFilter(e, filter),
+    );
+  }, [entries, sort, query, filter]);
+  const folders = visible.filter((e) => e.tag === 'folder');
+  const files = visible.filter((e) => e.tag === 'file');
 
   return (
     <div>
-      {/* Toolbar */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      {/* Breadcrumbs + primary actions */}
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-sm">
           <button
             onClick={() => setPath('/')}
@@ -266,7 +306,6 @@ function FilesView() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ViewToggle />
           <button onClick={newFolder} className="btn-secondary">
             <IconFolderPlus className="h-4 w-4" />
             <span className="hidden sm:inline">{t('newFolder')}</span>
@@ -287,6 +326,52 @@ function FilesView() {
             onChange={(e) => handleUpload(e.target.files)}
           />
         </div>
+      </div>
+
+      {/* Search / filter / sort / view controls */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchInFolder')}
+            className="input py-2 pl-9 pr-9"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-faint transition hover:text-strong"
+            >
+              <IconClose className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <IconFilter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as FilterKind)}
+            className="input w-auto py-2 pl-9"
+          >
+            {FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {t(f.label as TranslationKey)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <select
+          value={sort}
+          onChange={(e) => set('sort', e.target.value as SortKey)}
+          className="input w-auto py-2"
+        >
+          <option value="name">{t('sortName')}</option>
+          <option value="date">{t('sortDate')}</option>
+          <option value="size">{t('sortSize')}</option>
+        </select>
+        {view === 'grid' && <TileSizeControl />}
+        <ViewToggle />
       </div>
 
       {upload && (
@@ -340,8 +425,10 @@ function FilesView() {
           <SkeletonGrid grid={view === 'grid'} />
         ) : entries.length === 0 ? (
           <EmptyState onUpload={() => fileInput.current?.click()} />
+        ) : visible.length === 0 ? (
+          <NoResults />
         ) : view === 'grid' ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className={`grid gap-4 ${GRID_COLS[tileSize]}`}>
             {folders.map((entry) => (
               <FileCard
                 key={entry.path}
@@ -434,6 +521,49 @@ function ViewToggle() {
       >
         <IconList className="h-[18px] w-[18px]" />
       </button>
+    </div>
+  );
+}
+
+function TileSizeControl() {
+  const { tileSize, set, t } = useSettings();
+  const sizes: { value: TileSize; cls: string; label: TranslationKey }[] = [
+    { value: 'sm', cls: 'h-3.5 w-3.5', label: 'tileSmall' },
+    { value: 'md', cls: 'h-[17px] w-[17px]', label: 'tileMedium' },
+    { value: 'lg', cls: 'h-5 w-5', label: 'tileLarge' },
+  ];
+  return (
+    <div
+      className="flex items-center rounded-xl bg-slate-100 p-1 dark:bg-white/[0.06]"
+      title={t('tileSize')}
+    >
+      {sizes.map(({ value, cls, label }) => (
+        <button
+          key={value}
+          onClick={() => set('tileSize', value)}
+          title={t(label)}
+          className={`flex h-7 w-8 items-center justify-center rounded-lg transition ${
+            tileSize === value
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-slate-100'
+              : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+          }`}
+        >
+          <IconGrid className={cls} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NoResults() {
+  const t = useT();
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.06] dark:text-slate-500">
+        <IconSearch className="h-7 w-7" />
+      </div>
+      <p className="mt-4 text-sm font-medium text-strong">{t('noResults')}</p>
+      <p className="mt-1 text-sm text-faint">{t('noResultsHint')}</p>
     </div>
   );
 }
@@ -596,7 +726,7 @@ function FileCard({ entry, onOpen, ...actions }: EntryActions & { onOpen: () => 
       : `${formatBytes(entry.size)}${entry.modified ? ` · ${formatDate(entry.modified)}` : ''}`;
 
   return (
-    <div className="group card relative flex flex-col transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-card dark:hover:border-slate-600">
+    <div className="group card relative flex flex-col transition duration-150 hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-[0_14px_36px_-16px_rgba(124,108,255,0.55)] dark:hover:border-brand/45">
       <button
         onClick={onOpen}
         className="block aspect-[4/3] w-full overflow-hidden rounded-t-2xl"

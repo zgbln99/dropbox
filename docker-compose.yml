@@ -14,5 +14,7 @@ services:
     volumes:
       # Persist the SQLite database and cached previews across restarts.
       - ./data:/app/data
-    # Keep memory usage modest on a small VPS.
-    mem_limit: 512m
+    # Memory ceiling. PSD previews decode the whole document in memory, so a
+    # generous limit is needed for large files. Lower this if the VPS has
+    # little RAM (a small PSD still works at 512m).
+    mem_limit: 2g

@@ -10,9 +10,9 @@ const PREVIEW_DIR = path.join(process.cwd(), 'data', 'previews');
 /**
  * Largest PSD file accepted for preview. The whole file is buffered in memory
  * to parse it, so anything bigger risks an out-of-memory kill in a
- * memory-capped container.
+ * memory-capped container (see mem_limit in docker-compose.yml).
  */
-const MAX_PSD_BYTES = 256 * 1024 * 1024;
+const MAX_PSD_BYTES = 600 * 1024 * 1024;
 
 /** Error type carrying an HTTP status, used for clear client responses. */
 export class PreviewError extends Error {
@@ -136,7 +136,7 @@ async function loadAgPsd() {
  * RAM, plus the file buffer, plus the encoder). Larger documents fall back to
  * the small thumbnail Photoshop embeds in the file.
  */
-const COMPOSITE_MP_LIMIT = 24;
+const COMPOSITE_MP_LIMIT = 64;
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : 'unknown error';

@@ -323,6 +323,23 @@ export function IconGlobe(p: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconSearch(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.6-3.6" />
+    </Icon>
+  );
+}
+
+export function IconFilter(p: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...p}>
+      <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" />
+    </Icon>
+  );
+}
+
 export function IconEye(p: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...p}>

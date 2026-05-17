@@ -13,15 +13,23 @@ import { translate, type Lang, type TranslationKey } from './i18n';
 export type Theme = 'light' | 'dark';
 export type ViewMode = 'grid' | 'list';
 export type SortKey = 'name' | 'date' | 'size';
+export type TileSize = 'sm' | 'md' | 'lg';
 
 interface Settings {
   theme: Theme;
   lang: Lang;
   view: ViewMode;
   sort: SortKey;
+  tileSize: TileSize;
 }
 
-const DEFAULTS: Settings = { theme: 'dark', lang: 'en', view: 'grid', sort: 'name' };
+const DEFAULTS: Settings = {
+  theme: 'dark',
+  lang: 'en',
+  view: 'grid',
+  sort: 'name',
+  tileSize: 'md',
+};
 
 /** localStorage key — also read by the inline anti-FOUC script in layout.tsx. */
 export const SETTINGS_STORAGE_KEY = 'jrjr-settings';

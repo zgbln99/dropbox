@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { useSettings, type Theme, type ViewMode, type SortKey } from '@/lib/settings';
+import {
+  useSettings,
+  type Theme,
+  type ViewMode,
+  type SortKey,
+  type TileSize,
+} from '@/lib/settings';
 import { LANGUAGES, type Lang } from '@/lib/i18n';
 import { formatBytes } from '@/lib/utils';
 import {
@@ -75,7 +81,7 @@ function Segmented<T extends string>({
 }
 
 export default function SettingsPanel() {
-  const { theme, lang, view, sort, set, t } = useSettings();
+  const { theme, lang, view, sort, tileSize, set, t } = useSettings();
   const [account, setAccount] = useState<Account | null>(null);
 
   useEffect(() => {
@@ -128,6 +134,17 @@ export default function SettingsPanel() {
             options={[
               { value: 'grid', label: t('viewGrid'), icon: <IconGrid className="h-4 w-4" /> },
               { value: 'list', label: t('viewList'), icon: <IconList className="h-4 w-4" /> },
+            ]}
+          />
+        </Row>
+        <Row label={t('tileSize')}>
+          <Segmented<TileSize>
+            value={tileSize}
+            onChange={(v) => set('tileSize', v)}
+            options={[
+              { value: 'sm', label: t('tileSmall') },
+              { value: 'md', label: t('tileMedium') },
+              { value: 'lg', label: t('tileLarge') },
             ]}
           />
         </Row>
