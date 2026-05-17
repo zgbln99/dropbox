@@ -82,6 +82,11 @@ const en = {
   storageUsed: 'Storage used',
   activeLinks: 'Active share links',
   settingsSaved: 'Changes are saved automatically and kept in this browser.',
+  webdav: 'WebDAV access',
+  webdavHint:
+    'Mount your files as a network drive in Finder, Windows Explorer or any WebDAV client.',
+  webdavAddress: 'Address',
+  webdavPasswordNote: 'Sign in with your account name and password.',
 
   shareFile: 'Share file',
   shareFolder: 'Share folder',
@@ -199,6 +204,11 @@ const pl: Record<Key, string> = {
   storageUsed: 'Wykorzystane miejsce',
   activeLinks: 'Aktywne linki',
   settingsSaved: 'Zmiany zapisują się automatycznie i są pamiętane w tej przeglądarce.',
+  webdav: 'Dostęp WebDAV',
+  webdavHint:
+    'Podłącz pliki jako dysk sieciowy w Finderze, Eksploratorze Windows lub dowolnym kliencie WebDAV.',
+  webdavAddress: 'Adres',
+  webdavPasswordNote: 'Zaloguj się nazwą i hasłem swojego konta.',
 
   shareFile: 'Udostępnij plik',
   shareFolder: 'Udostępnij folder',

@@ -19,12 +19,15 @@ import {
   IconDrive,
   IconLink,
   IconSettings,
+  IconCopy,
+  IconCheck,
 } from './icons';
 
 interface Account {
   user: string;
   storage: { used: number; allocated: number };
   shares: { total: number; active: number };
+  webdavUrl: string;
 }
 
 function Card({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
@@ -83,6 +86,13 @@ function Segmented<T extends string>({
 export default function SettingsPanel() {
   const { theme, lang, view, sort, tileSize, set, t } = useSettings();
   const [account, setAccount] = useState<Account | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function copyWebdav(url: string) {
+    navigator.clipboard?.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +201,44 @@ export default function SettingsPanel() {
           </div>
         </div>
       </Card>
+
+      <div className="card p-5 sm:p-6">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-slate-400 dark:text-slate-500">
+            <IconDrive className="h-4 w-4" />
+          </span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            {t('webdav')}
+          </h2>
+        </div>
+        <p className="mb-4 text-sm text-muted">{t('webdavHint')}</p>
+        <div className="divide-y divider">
+          <Row label={t('webdavAddress')}>
+            <div className="flex items-center gap-2">
+              <code className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-strong dark:bg-white/[0.06]">
+                {account?.webdavUrl ?? '—'}
+              </code>
+              {account?.webdavUrl && (
+                <button
+                  onClick={() => copyWebdav(account.webdavUrl)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                  title={t('copy')}
+                >
+                  {copied ? (
+                    <IconCheck className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <IconCopy className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+            </div>
+          </Row>
+          <Row label={t('username')}>
+            <span className="text-sm font-medium text-strong">{account?.user ?? '—'}</span>
+          </Row>
+        </div>
+        <p className="mt-3 text-xs text-faint">{t('webdavPasswordNote')}</p>
+      </div>
     </div>
   );
 }

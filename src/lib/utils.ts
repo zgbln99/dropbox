@@ -25,7 +25,7 @@ export function fileKind(name: string): FileKind {
 /** Whether a thumbnail/preview image can be generated for this file. */
 export function hasPreview(name: string): boolean {
   const k = fileKind(name);
-  return k === 'image' || k === 'svg' || k === 'psd';
+  return k === 'image' || k === 'svg' || k === 'psd' || k === 'pdf';
 }
 
 /** Whether the file can be shown inline in the browser. */

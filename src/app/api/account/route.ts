@@ -27,6 +27,7 @@ export async function GET(req: Request) {
       user: config.adminUser,
       storage,
       shares: { total: shares.length, active },
+      webdavUrl: `${config.appUrl}/dav`,
     });
   } catch (err) {
     return errorResponse(err);

@@ -1,8 +1,13 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { downloadContent, getThumbnail } from './dropbox';
 import { fileKind } from './utils';
+
+const execFileAsync = promisify(execFile);
 
 /** Disk cache for generated previews. Populated lazily, on first request. */
 const PREVIEW_DIR = path.join(process.cwd(), 'data', 'previews');
@@ -247,6 +252,57 @@ async function renderPsd(ab: ArrayBuffer): Promise<Buffer> {
 }
 
 /**
+ * Render the first page of a PDF to a JPEG preview using poppler's
+ * `pdftoppm`. The tool works on files, so the document is written to a
+ * temporary path, rasterised, and the result re-encoded with sharp.
+ */
+async function renderPdf(buffer: Buffer): Promise<Buffer> {
+  log(`renderPdf: ${buffer.length} bytes`);
+  if (buffer.length < 5 || buffer.toString('latin1', 0, 5) !== '%PDF-') {
+    throw new PreviewError(422, 'Downloaded file is not a valid PDF document');
+  }
+
+  const base = path.join(os.tmpdir(), `pdfprev-${process.pid}-${Date.now()}`);
+  const input = `${base}.pdf`;
+  const output = `${base}.jpg`;
+  await fs.promises.writeFile(input, buffer);
+
+  try {
+    log('rendering PDF page 1 with pdftoppm');
+    // -singlefile writes exactly `${base}.jpg`; -scale-to bounds the longer side.
+    await execFileAsync('pdftoppm', [
+      '-jpeg',
+      '-singlefile',
+      '-f',
+      '1',
+      '-l',
+      '1',
+      '-scale-to',
+      '1600',
+      input,
+      base,
+    ]);
+    const page = await fs.promises.readFile(output);
+    const sharp = (await import('sharp')).default;
+    const jpeg = await sharp(page)
+      .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    log(`PDF preview encoded: ${jpeg.length} bytes`);
+    return jpeg;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    if (message.includes('ENOENT')) {
+      throw new PreviewError(500, 'PDF preview is unavailable (poppler is not installed)');
+    }
+    throw new PreviewError(422, `Could not render PDF: ${message}`);
+  } finally {
+    fs.promises.unlink(input).catch(() => {});
+    fs.promises.unlink(output).catch(() => {});
+  }
+}
+
+/**
  * Return a cached preview image for the given Dropbox file, generating and
  * caching it on first request. Returns null for unsupported file types.
  * Throws PreviewError / DropboxError with useful messages on failure.
@@ -265,7 +321,7 @@ export async function getPreview(
     return { body: Buffer.from(await res.arrayBuffer()), contentType: 'image/svg+xml' };
   }
 
-  if (kind !== 'image' && kind !== 'psd') {
+  if (kind !== 'image' && kind !== 'psd' && kind !== 'pdf') {
     log(`no preview available for kind=${kind}`);
     return null;
   }
@@ -297,6 +353,10 @@ export async function getPreview(
     const ab = await res.arrayBuffer();
     log(`PSD body read into memory: ${ab.byteLength} bytes`);
     body = await renderPsd(ab);
+  } else if (kind === 'pdf') {
+    log(`downloading PDF from Dropbox: ${dbxPath}`);
+    const res = await downloadContent(dbxPath);
+    body = await renderPdf(Buffer.from(await res.arrayBuffer()));
   } else {
     // Dropbox renders image thumbnails server-side — cheap on the VPS.
     body = await getThumbnail(dbxPath, 'w1024h768');

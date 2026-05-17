@@ -622,7 +622,7 @@ function useT() {
 
 function CardThumb({ entry, kind }: { entry: Entry; kind: FileKind | 'folder' }) {
   const [failed, setFailed] = useState(false);
-  const isMedia = kind === 'image' || kind === 'svg' || kind === 'psd';
+  const isMedia = kind === 'image' || kind === 'svg' || kind === 'psd' || kind === 'pdf';
 
   if (isMedia && !failed) {
     const url = `/api/files/preview?path=${encodeURIComponent(entry.path)}&rev=${encodeURIComponent(

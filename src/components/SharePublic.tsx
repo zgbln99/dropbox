@@ -321,7 +321,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 function ShareThumb({ entry, api }: { entry: Entry; api: ShareApi }) {
   const [failed, setFailed] = useState(false);
   const kind: FileKind | 'folder' = entry.tag === 'folder' ? 'folder' : fileKind(entry.name);
-  const isMedia = kind === 'image' || kind === 'svg' || kind === 'psd';
+  const isMedia = kind === 'image' || kind === 'svg' || kind === 'psd' || kind === 'pdf';
 
   if (isMedia && !failed) {
     return (
