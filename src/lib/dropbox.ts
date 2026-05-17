@@ -60,6 +60,18 @@ export function toApiPath(p: string): string {
   return out;
 }
 
+/**
+ * Serialise a Dropbox-API-Arg header value. The Dropbox content endpoints
+ * require this header to be ASCII-only, so any non-ASCII characters (e.g. in
+ * file names) must be escaped as \uXXXX — otherwise Dropbox replies 400.
+ */
+function apiArg(obj: unknown): string {
+  // Escape every code point outside printable ASCII (Dropbox requires it).
+  return JSON.stringify(obj).replace(/[^\x20-\x7e]/g, (c) =>
+    `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
 /** Call a Dropbox RPC endpoint (api.dropboxapi.com/2/...). */
 async function rpc<T = unknown>(endpoint: string, body: unknown): Promise<T> {
   const token = await getAccessToken();
@@ -144,7 +156,7 @@ export async function downloadContent(path: string): Promise<Response> {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({ path: toApiPath(path) }),
+      'Dropbox-API-Arg': apiArg({ path: toApiPath(path) }),
     },
   });
   if (!res.ok) {
@@ -167,7 +179,7 @@ export async function uploadFile(path: string, body: Buffer): Promise<DbxEntry> 
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': JSON.stringify({
+      'Dropbox-API-Arg': apiArg({
         path: toApiPath(path),
         mode: 'overwrite',
         autorename: false,
@@ -229,7 +241,7 @@ async function contentRpc<T>(
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': JSON.stringify(arg),
+      'Dropbox-API-Arg': apiArg(arg),
     },
     body: new Uint8Array(body),
   });
@@ -318,7 +330,7 @@ export async function getThumbnail(path: string, size = 'w640h480'): Promise<Buf
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({
+      'Dropbox-API-Arg': apiArg({
         resource: { '.tag': 'path', path: toApiPath(path) },
         format: { '.tag': 'jpeg' },
         size: { '.tag': size },
