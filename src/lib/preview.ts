@@ -46,6 +46,33 @@ export interface PreviewResult {
 let agPsdInitialized = false;
 
 /**
+ * Enable CMYK composite decoding in ag-psd.
+ *
+ * ag-psd ships a working CMYK->RGB decoder, but its public color-mode
+ * allowlist (`supportedColorModes`) only contains Bitmap/Grayscale/RGB, so
+ * `readPsd` rejects CMYK documents at the header check before that decoder
+ * ever runs. CMYK is common for print-oriented PSDs. The allowlist lives on
+ * the internal `psdReader` module and is the same mutable array `readPsd`
+ * consults, so pushing the CMYK mode (4) onto it unlocks those files.
+ *
+ * Best-effort: if the internal module path ever changes, RGB/grayscale PSDs
+ * still render and only CMYK previews are affected.
+ */
+async function enableCmyk(): Promise<void> {
+  try {
+    const reader = (await import('ag-psd/dist/psdReader.js')) as {
+      supportedColorModes?: number[];
+    };
+    const modes = reader.supportedColorModes;
+    if (Array.isArray(modes) && !modes.includes(4)) {
+      modes.push(4);
+    }
+  } catch (err) {
+    log(`could not enable CMYK support: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
  * Load ag-psd and, on first use, install a minimal canvas shim.
  *
  * ag-psd needs a way to allocate `ImageData` objects. In Node there is no
@@ -73,6 +100,7 @@ async function loadAgPsd() {
         data: new Uint8ClampedArray(width * height * 4),
       }),
     );
+    await enableCmyk();
     agPsdInitialized = true;
   }
   return agPsd;
